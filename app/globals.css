@@ -1,0 +1,99 @@
+@import "tailwindcss";
+
+:root {
+  /* color-scheme tells the browser to render native, unstyled UI (form
+     control chrome, scrollbars) to match whichever mode is active below,
+     instead of always defaulting to light — belt-and-suspenders alongside
+     the explicit tokens, for anything we didn't hand-style. */
+  color-scheme: light dark;
+
+  --background: #fffaf5;
+  --foreground: #16213a;
+
+  /* Semantic surface/text tokens — every page/component should reach for
+     these (bg-surface, border-line, text-muted, text-faint, bg-surface-hover)
+     rather than raw bg-white/border-neutral-200/text-neutral-500 etc, so the
+     whole app follows the OS light/dark setting from one place. See the
+     dark-mode block below for the flipped values. `background`/`foreground`
+     already existed (page-level); these fill in the rest of the palette. */
+  --surface: #ffffff;
+  --surface-hover: #f5f5f5;
+  --line: #e5e5e5;
+  --muted: #737373;
+  --faint: #a3a3a3;
+
+  /* PAYDER brand — Orange + Navy Blue (see PAYDER-ARCHITECTURE.md / brand
+     decision: logo + palette). Orange is the primary action/accent color,
+     Navy is the anchor for dark surfaces (sidebars, headers) and text. */
+  --color-brand-orange: #ff7a1a;
+  --color-brand-orange-dark: #e2650a;
+  --color-brand-orange-light: #ffede0;
+  --color-brand-navy: #16213a;
+  --color-brand-navy-light: #22314f;
+  --color-brand-navy-lighter: #2e4066;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-surface-hover: var(--surface-hover);
+  --color-line: var(--line);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-brand-orange: var(--color-brand-orange);
+  --color-brand-orange-dark: var(--color-brand-orange-dark);
+  --color-brand-orange-light: var(--color-brand-orange-light);
+  --color-brand-navy: var(--color-brand-navy);
+  --color-brand-navy-light: var(--color-brand-navy-light);
+  --color-brand-navy-lighter: var(--color-brand-navy-lighter);
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0f1626;
+    --foreground: #f2f3f7;
+    --surface: #141b2e;
+    --surface-hover: rgba(255, 255, 255, 0.08);
+    --line: #263252;
+    --muted: #9ca3af;
+    --faint: #6b7280;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+}
+
+/* Form controls across the app are styled with borders/padding via Tailwind
+   utility classes but mostly don't set an explicit background/text color, so
+   without this they'd fall back to the browser's default (usually white bg
+   and black text) and go unreadable on a dark page. This is a low-specificity
+   element-selector rule, so any component that DOES set its own background
+   or text color utility class on an input still wins (Tailwind class
+   selectors beat a bare element selector). */
+input,
+select,
+textarea {
+  background-color: var(--surface);
+  color: var(--foreground);
+}
+
+@keyframes payder-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.payder-fade-up {
+  animation: payder-fade-up 0.35s ease-out both;
+}
