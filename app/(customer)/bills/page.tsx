@@ -41,6 +41,16 @@ export default function BillsPage() {
         — an admin completes it on your behalf until direct integration is
         live (architecture doc §5.4b).
       </p>
+
+      <Link
+        href="/pay-bill"
+        className="max-w-lg rounded-2xl border border-line bg-surface p-5 transition hover:border-brand-orange"
+      >
+        <p className="font-medium">School fees, contributions & other billers</p>
+        <p className="mt-1 text-sm text-muted">
+          Browse bills set up by schools and organizations, and pay straight from your wallet.
+        </p>
+      </Link>
       <form onSubmit={submit} className="flex max-w-sm flex-col gap-4">
         <label className="flex flex-col gap-1 text-sm">
           Category

@@ -563,7 +563,220 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify({ isActive }),
     }),
+  adminGrantBillEdit: (billerId: string, note?: string) =>
+    apiFetch(`/admin/billers/${billerId}/grant-bill-edit`, {
+      method: 'PATCH',
+      body: JSON.stringify({ note }),
+    }),
+
+  // --- Biller self-service (a logged-in BILLER-role user's own portal) ----
+  billerMe: () =>
+    apiFetch<{
+      biller: { id: string; name: string; type: string; isJoint: boolean; isActive: boolean };
+      myLabel: 'A' | 'B' | null;
+      coSigner: { id: string; firstName: string; lastName: string; billerLabel: string } | null;
+      pinSet: boolean;
+    }>('/billers/me'),
+  billerSetPin: (pin: string, currentPin?: string) =>
+    apiFetch<{ updated: true }>('/billers/pin', {
+      method: 'POST',
+      body: JSON.stringify({ pin, currentPin }),
+    }),
+  billerBalance: () =>
+    apiFetch<{ currency: string; balance: string; isFrozen: boolean }>('/billers/wallet/balance'),
+  billerStatement: (params?: { limit?: number; cursor?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.limit) qs.set('limit', String(params.limit));
+    if (params?.cursor) qs.set('cursor', params.cursor);
+    const suffix = qs.toString() ? `?${qs.toString()}` : '';
+    return apiFetch<{
+      items: {
+        id: string;
+        direction: 'DEBIT' | 'CREDIT';
+        amount: string;
+        transaction: { id: string; type: string; status: string; createdAt: string };
+        createdAt: string;
+      }[];
+      nextCursor: string | null;
+    }>(`/billers/wallet/statement${suffix}`);
+  },
+  billerWithdraw: (payload: {
+    amount: string;
+    bankName: string;
+    accountNumber: string;
+    confirmAccountNumber: string;
+    accountName: string;
+    pin: string;
+  }) =>
+    apiFetch<{ awaitingCoSignerApproval: boolean; withdrawalRequest?: WithdrawalRequest; draft?: BillerWithdrawalDraft }>(
+      '/billers/wallet/withdraw',
+      { method: 'POST', body: JSON.stringify(payload) },
+    ),
+  billerWithdrawDrafts: () => apiFetch<BillerWithdrawalDraft[]>('/billers/wallet/withdraw/drafts'),
+  billerApproveDraft: (id: string, pin: string) =>
+    apiFetch<BillerWithdrawalDraft>(`/billers/wallet/withdraw/drafts/${id}/approve`, {
+      method: 'POST',
+      body: JSON.stringify({ pin }),
+    }),
+  billerCancelDraft: (id: string) =>
+    apiFetch<BillerWithdrawalDraft>(`/billers/wallet/withdraw/drafts/${id}/cancel`, { method: 'POST' }),
+  billerWithdrawalsMine: () => apiFetch<WithdrawalRequest[]>('/billers/wallet/withdrawals/mine'),
+
+  billerDepositInitiate: (amount: string) =>
+    apiFetch<{ authorizationUrl?: string; reference: string }>('/billers/wallet/deposit/initiate', {
+      method: 'POST',
+      body: JSON.stringify({ amount }),
+    }),
+  billerDepositVerify: (reference: string) =>
+    apiFetch<{ credited: boolean; status: string }>(
+      `/billers/wallet/deposit/verify/${encodeURIComponent(reference)}`,
+    ),
+
+  // Bill builder — each biller has exactly one bill.
+  billerGetBill: () => apiFetch<BillDefinition | null>('/billers/bill'),
+  billerUpsertBill: (payload: {
+    name: string;
+    fields: BillFieldInput[];
+    pricingMode: 'FLAT' | 'PER_COMBINATION';
+    flatAmount?: number;
+    pricingTable?: Record<string, number>;
+  }) => apiFetch<BillDefinition>('/billers/bill', { method: 'PUT', body: JSON.stringify(payload) }),
+  billerPublishBill: () => apiFetch<BillDefinition>('/billers/bill/publish', { method: 'POST' }),
+  billerRequestBillEdit: (reason?: string) =>
+    apiFetch('/billers/bill/request-edit', { method: 'POST', body: JSON.stringify({ reason }) }),
+
+  billerGetReportPreference: () =>
+    apiFetch<{ frequency: 'DAILY' | 'WEEKLY' | 'EVERY_3_DAYS' | 'OFF'; lastSentAt: string | null }>(
+      '/billers/report-preference',
+    ),
+  billerSetReportPreference: (frequency: 'DAILY' | 'WEEKLY' | 'EVERY_3_DAYS' | 'OFF') =>
+    apiFetch('/billers/report-preference', { method: 'POST', body: JSON.stringify({ frequency }) }),
+
+  billerListPayments: (params?: { from?: string; to?: string; extra?: Record<string, string> }) => {
+    const qs = new URLSearchParams();
+    if (params?.from) qs.set('from', params.from);
+    if (params?.to) qs.set('to', params.to);
+    Object.entries(params?.extra ?? {}).forEach(([k, v]) => qs.set(k, v));
+    const suffix = qs.toString() ? `?${qs.toString()}` : '';
+    return apiFetch<BillerPaymentRow[]>(`/billers/payments${suffix}`);
+  },
+
+  // --- Public bill catalog + payment (the customer Bills tab's category
+  // browsing, AND the new no-login-required /pay-bill web flow) ----------
+  billPayCategories: () => apiFetch<string[]>('/bill-pay/categories', { auth: false }),
+  billPayBillersByCategory: (type: string) =>
+    apiFetch<{ id: string; name: string; type: string; bill: { name: string } }[]>(
+      `/bill-pay/categories/${encodeURIComponent(type)}/billers`,
+      { auth: false },
+    ),
+  billPayBillDetail: (billerId: string) =>
+    apiFetch<PublicBillDetail>(`/bill-pay/billers/${billerId}/bill`, { auth: false }),
+  billPayQuote: (billerId: string, fieldValues: Record<string, string>) =>
+    apiFetch<{ billAmount: number; portalFee: number; totalAmount: number }>(
+      `/bill-pay/billers/${billerId}/quote`,
+      { method: 'POST', body: JSON.stringify({ fieldValues }), auth: false },
+    ),
+  billPayWithWallet: (billerId: string, fieldValues: Record<string, string>) =>
+    apiFetch(`/bill-pay/billers/${billerId}/pay/wallet`, {
+      method: 'POST',
+      body: JSON.stringify({ fieldValues }),
+    }),
+  billPayAsGuest: (
+    billerId: string,
+    payload: { fieldValues: Record<string, string>; guestName: string; guestEmail: string; guestPhone?: string },
+  ) =>
+    apiFetch<{ authorizationUrl?: string; reference: string; billerPaymentId: string }>(
+      `/bill-pay/billers/${billerId}/pay/guest`,
+      { method: 'POST', body: JSON.stringify(payload), auth: false },
+    ),
+  billPayVerify: (reference: string) =>
+    apiFetch<{ credited: boolean; status: string }>(
+      `/bill-pay/verify/${encodeURIComponent(reference)}`,
+      { auth: false },
+    ),
 };
+
+// --- Biller types --------------------------------------------------------
+
+export type BillFieldInput = {
+  key: string;
+  label: string;
+  type: 'TEXT' | 'SELECT';
+  options?: string[];
+};
+
+export type BillDefinition = {
+  id: string;
+  billerId: string;
+  name: string;
+  fields: BillFieldInput[];
+  pricingMode: 'FLAT' | 'PER_COMBINATION';
+  flatAmount: string | null;
+  pricingTable: Record<string, number> | null;
+  status: 'DRAFT' | 'PUBLISHED';
+  oneTimeEditUnlockedAt: string | null;
+};
+
+export type BillerWithdrawalDraft = {
+  id: string;
+  billerId: string;
+  amount: string;
+  bankName: string;
+  accountNumber: string;
+  accountName: string;
+  initiatedByUserId: string;
+  status: 'AWAITING_APPROVAL' | 'APPROVED' | 'CANCELLED';
+  createdAt: string;
+};
+
+export type BillerPaymentRow = {
+  id: string;
+  payerName?: string;
+  guestEmail: string | null;
+  guestPhone: string | null;
+  userId: string | null;
+  fieldValues: Record<string, string>;
+  billAmount: string;
+  portalFee: string;
+  totalAmount: string;
+  paymentMethod: 'WALLET' | 'PAYSTACK';
+  createdAt: string;
+};
+
+export type PublicBillDetail = {
+  billerId: string;
+  billerName: string;
+  billName: string;
+  fields: BillFieldInput[];
+  pricingMode: 'FLAT' | 'PER_COMBINATION';
+  flatAmount: string | null;
+  pricingTable: Record<string, number> | null;
+  portalFee: string;
+};
+
+/** Query/export/report endpoints stream text/csv, not JSON, so — same
+ * reasoning as manualPaymentReceiptUrl below — the caller builds a URL and
+ * fetches it directly (with the bearer token) rather than going through
+ * apiFetch. */
+export function billerPaymentsExportCsvUrl(params?: { from?: string; to?: string; extra?: Record<string, string> }) {
+  const base = process.env.NEXT_PUBLIC_API_BASE_URL ?? apiBaseUrlForLinks();
+  const qs = new URLSearchParams();
+  if (params?.from) qs.set('from', params.from);
+  if (params?.to) qs.set('to', params.to);
+  Object.entries(params?.extra ?? {}).forEach(([k, v]) => qs.set(k, v));
+  const suffix = qs.toString() ? `?${qs.toString()}` : '';
+  return `${base}/billers/payments/export.csv${suffix}`;
+}
+
+export function billerDailyReportUrl(date?: string) {
+  const base = process.env.NEXT_PUBLIC_API_BASE_URL ?? apiBaseUrlForLinks();
+  return `${base}/billers/payments/daily-report${date ? `?date=${date}` : ''}`;
+}
+
+function apiBaseUrlForLinks() {
+  if (typeof window !== 'undefined') return `http://${window.location.hostname}:3000/api/v1`;
+  return 'http://localhost:3000/api/v1';
+}
 
 export interface SafeUser {
   id: string;

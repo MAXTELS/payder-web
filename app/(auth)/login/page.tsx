@@ -24,6 +24,7 @@ export default function LoginPage() {
       const user = getCurrentUser();
       if (user?.role === 'ADMIN') router.push('/admin');
       else if (user?.role === 'CUSTOMER_CARE') router.push('/care');
+      else if (user?.role === 'BILLER') router.push('/biller');
       else router.push('/dashboard');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Something went wrong. Try again.');

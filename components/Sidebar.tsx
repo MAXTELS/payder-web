@@ -17,6 +17,7 @@ const ROLE_LABEL: Record<string, string> = {
   CUSTOMER: 'Customer',
   ADMIN: 'Admin',
   CUSTOMER_CARE: 'Customer care',
+  BILLER: 'Biller',
 };
 
 /**

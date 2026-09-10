@@ -8,7 +8,7 @@
  * to (PAYDER-ARCHITECTURE.md §8/§6). Do not add money-moving logic here.
  */
 
-export type Role = 'CUSTOMER' | 'ADMIN' | 'CUSTOMER_CARE';
+export type Role = 'CUSTOMER' | 'ADMIN' | 'CUSTOMER_CARE' | 'BILLER';
 
 export interface SessionUser {
   id: string;
