@@ -11,14 +11,16 @@ type FundingRequest = Awaited<ReturnType<typeof api.walletFundingMine>>[number];
 
 const OTHER_BANK = '__OTHER__';
 
+// Consolidated to Moniepoint only as of 2026-09-11 (Access Bank / Opay
+// removed) — kept as a list (not a single object) so the "I have paid" flow
+// below doesn't need a separate single-account code path if another account
+// is ever added back later.
 const BANK_ACCOUNTS: {
-  key: 'ACCESS_BANK' | 'OPAY' | 'MONIEPOINT';
+  key: 'MONIEPOINT';
   bank: string;
   accountNumber: string;
   accountName: string;
 }[] = [
-  { key: 'ACCESS_BANK', bank: 'Access Bank', accountNumber: '1444773477', accountName: 'Okonkwo Onyeka Jude' },
-  { key: 'OPAY', bank: 'Opay', accountNumber: '7082878478', accountName: 'Okonkwo Onyeka Jude' },
   { key: 'MONIEPOINT', bank: 'Moniepoint', accountNumber: '8137392019', accountName: 'Okonkwo Onyeka Jude' },
 ];
 
@@ -81,7 +83,7 @@ export default function WalletPage() {
 
   const [amount, setAmount] = useState('');
   const [selectedAccount, setSelectedAccount] = useState<(typeof BANK_ACCOUNTS)[number]['key']>(
-    'ACCESS_BANK',
+    'MONIEPOINT',
   );
   const [havePaid, setHavePaid] = useState(false);
   const [senderAccountName, setSenderAccountName] = useState('');
@@ -279,7 +281,7 @@ export default function WalletPage() {
           </p>
         </div>
 
-        <div className="mb-6 grid gap-3 sm:grid-cols-3">
+        <div className="mb-6 grid gap-3 sm:max-w-sm">
           {BANK_ACCOUNTS.map((acc) => (
             // A <div role="button">, not a real <button> — CopyableRow below
             // renders its own <button> for the copy action, and HTML forbids
