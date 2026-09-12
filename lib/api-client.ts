@@ -179,6 +179,22 @@ export const api = {
     password: string;
   }) =>
     apiFetch('/auth/register', { method: 'POST', body: JSON.stringify(payload), auth: false }),
+  // Forgot-password, step 1: send a 6-digit code to the account's email.
+  // Backend always responds { sent: true } regardless of whether the email
+  // is registered (anti-enumeration) — see AuthService.requestPasswordReset.
+  requestPasswordReset: (email: string) =>
+    apiFetch<{ sent: true }>('/auth/password-reset/request', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+      auth: false,
+    }),
+  // Forgot-password, step 2: the code from step 1 plus a new password.
+  resetPassword: (email: string, code: string, newPassword: string) =>
+    apiFetch<{ reset: true }>('/auth/password-reset/confirm', {
+      method: 'POST',
+      body: JSON.stringify({ email, code, newPassword }),
+      auth: false,
+    }),
   me: () =>
     apiFetch<{
       id: string;
@@ -224,6 +240,36 @@ export const api = {
       method: 'POST',
     }),
 
+  // VTU (airtime/data/TV) via VTpass — see backend BillsService/VtpassProvider.
+  // Data bundle plans / TV bouquets, fetched live so sandbox vs live pricing
+  // is always whatever VTpass actually has right now (no PAYDER-side list to
+  // keep in sync).
+  billsVariations: (serviceId: string) =>
+    apiFetch<{ code: string; name: string; amount: string }[]>(
+      `/bills/variations?serviceId=${encodeURIComponent(serviceId)}`,
+    ),
+  // TV only: confirms a smartcard number and returns the subscriber's name
+  // before the customer commits to paying.
+  billsVerify: (serviceId: string, customerId: string) =>
+    apiFetch<{ valid: boolean; customerName?: string }>(
+      `/bills/verify?serviceId=${encodeURIComponent(serviceId)}&customerId=${encodeURIComponent(customerId)}`,
+    ),
+  billsPurchase: (dto: {
+    category: 'airtime' | 'data' | 'tv';
+    serviceId: string;
+    variationCode?: string;
+    customerId: string;
+    amount: string;
+    phone: string;
+  }) =>
+    apiFetch<{ id: string; status: string; providerReference?: string }>('/bills/purchase', {
+      method: 'POST',
+      body: JSON.stringify(dto),
+    }),
+  // Polled while a purchase is PROCESSING (VTpass responded "pending").
+  billsStatus: (transactionId: string) =>
+    apiFetch<{ id: string; status: string }>(`/bills/${encodeURIComponent(transactionId)}/status`),
+
   // Paystack instant funding — runs alongside manual bank transfer, not in
   // place of it. `fund` starts checkout and returns a URL to redirect the
   // browser to; `verify` is called from the callback page once the customer
@@ -256,6 +302,20 @@ export const api = {
       walletCount: number;
       asOf: string;
     }>('/admin/reports/total-customer-balance'),
+  adminNetBalance: () =>
+    apiFetch<{
+      currency: string;
+      netBalance: string;
+      users: { totalBalance: string; walletCount: number };
+      billers: { totalBalance: string; walletCount: number; activeBillerCount: number };
+      asOf: string;
+    }>('/admin/reports/net-balance'),
+  adminPortalCharges: (days?: number) =>
+    apiFetch<{
+      currency: string;
+      today: { date: string; totalCharges: string; transactionCount: number };
+      history: { date: string; totalCharges: string; transactionCount: number }[];
+    }>(`/admin/reports/portal-charges${days ? `?days=${days}` : ''}`),
 
   // Manual invoice-payment flow — PAYDER-ARCHITECTURE.md §5.4b.
   manualPaymentLookup: (payload: { biller: 'REMITA' | 'ETRANZACT'; invoiceReference: string }) =>

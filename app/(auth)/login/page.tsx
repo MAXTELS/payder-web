@@ -1,14 +1,16 @@
 'use client';
 
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { api, ApiError } from '@/lib/api-client';
 import { storeSession, getCurrentUser } from '@/lib/auth';
 import { Logo } from '@/components/Logo';
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const justReset = searchParams.get('reset') === '1';
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -44,6 +46,11 @@ export default function LoginPage() {
           <p className="mt-1 text-sm text-muted">
             One login, three portals — this app routes you to the right one by role.
           </p>
+          {justReset && (
+            <p className="mt-4 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700 dark:bg-green-900/30 dark:text-green-400">
+              Your password has been reset — sign in with your new password.
+            </p>
+          )}
           <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-4">
             <label className="flex flex-col gap-1 text-sm">
               Email or phone
@@ -55,7 +62,15 @@ export default function LoginPage() {
               />
             </label>
             <label className="flex flex-col gap-1 text-sm">
-              Password
+              <span className="flex items-center justify-between">
+                Password
+                <Link
+                  href="/forgot-password"
+                  className="text-xs font-medium text-brand-orange hover:underline"
+                >
+                  Forgot password?
+                </Link>
+              </span>
               <input
                 type="password"
                 className="rounded-lg border border-line px-3 py-2.5 outline-none transition focus:border-brand-orange"
@@ -82,5 +97,13 @@ export default function LoginPage() {
         </p>
       </div>
     </main>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
   );
 }

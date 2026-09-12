@@ -17,11 +17,13 @@ function allCombinationKeys(fields: BillFieldInput[]): string[] {
   return combos.map((c) => c.join('|'));
 }
 
+type FieldRow = BillFieldInput & { optionsRaw?: string };
+
 export default function BillBuilderPage() {
   const [existing, setExisting] = useState<BillDefinition | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [name, setName] = useState('');
-  const [fields, setFields] = useState<BillFieldInput[]>([
+  const [fields, setFields] = useState<FieldRow[]>([
     { key: '', label: '', type: 'TEXT' },
   ]);
   const [pricingMode, setPricingMode] = useState<'FLAT' | 'PER_COMBINATION'>('FLAT');
@@ -38,7 +40,9 @@ export default function BillBuilderPage() {
         setExisting(bill);
         if (bill) {
           setName(bill.name);
-          setFields(bill.fields);
+          setFields(
+            bill.fields.map((f) => ({ ...f, optionsRaw: (f.options ?? []).join(', ') })),
+          );
           setPricingMode(bill.pricingMode);
           setFlatAmount(bill.flatAmount ?? '');
           setPricingTable(bill.pricingTable ?? {});
@@ -51,13 +55,13 @@ export default function BillBuilderPage() {
   const locked = existing?.status === 'PUBLISHED' && !existing.oneTimeEditUnlockedAt;
   const combos = allCombinationKeys(fields);
 
-  function updateField(i: number, patch: Partial<BillFieldInput>) {
+  function updateField(i: number, patch: Partial<FieldRow>) {
     setFields(fields.map((f, idx) => (idx === i ? { ...f, ...patch } : f)));
   }
 
   function updateOptions(i: number, raw: string) {
     const options = raw.split(',').map((s) => s.trim()).filter(Boolean);
-    updateField(i, { options });
+    updateField(i, { options, optionsRaw: raw });
   }
 
   async function save(e: React.FormEvent) {
@@ -66,7 +70,7 @@ export default function BillBuilderPage() {
     try {
       const saved = await api.billerUpsertBill({
         name,
-        fields,
+        fields: fields.map(({ optionsRaw, ...f }) => f),
         pricingMode,
         flatAmount: pricingMode === 'FLAT' ? Number(flatAmount) : undefined,
         pricingTable: pricingMode === 'PER_COMBINATION' ? pricingTable : undefined,
@@ -181,7 +185,7 @@ export default function BillBuilderPage() {
                     <input
                       className="rounded border px-2 py-1.5 text-sm sm:flex-1"
                       placeholder="Options, comma separated (e.g. 100L,200L,300L)"
-                      value={(f.options ?? []).join(', ')}
+                      value={f.optionsRaw ?? (f.options ?? []).join(', ')}
                       onChange={(e) => updateOptions(i, e.target.value)}
                     />
                   )}

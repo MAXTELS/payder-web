@@ -97,3 +97,33 @@ textarea {
 .payder-fade-up {
   animation: payder-fade-up 0.35s ease-out both;
 }
+
+/* Slow-drifting blurred blobs behind the marketing homepage's hero — pure
+   CSS, no animation library. Two different durations/delays so the pair
+   don't move in lockstep. */
+@keyframes payder-blob-float {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(24px, -32px) scale(1.08);
+  }
+}
+
+.payder-blob {
+  animation: payder-blob-float 12s ease-in-out infinite;
+}
+
+.payder-blob-delay {
+  animation: payder-blob-float 15s ease-in-out infinite;
+  animation-delay: -4s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .payder-fade-up,
+  .payder-blob,
+  .payder-blob-delay {
+    animation: none;
+  }
+}
