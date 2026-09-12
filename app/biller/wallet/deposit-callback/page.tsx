@@ -1,10 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { api } from '@/lib/api-client';
 
-export default function BillerDepositCallbackPage() {
+/** useSearchParams() requires a Suspense boundary at the page level for
+ * `next build`'s static export — see app/pay-bill/callback/page.tsx for the
+ * same fix and the fuller explanation. */
+function BillerDepositCallbackInner() {
   const params = useSearchParams();
   const router = useRouter();
   const [status, setStatus] = useState<'checking' | 'success' | 'failed'>('checking');
@@ -36,5 +39,21 @@ export default function BillerDepositCallbackPage() {
         </button>
       </div>
     </main>
+  );
+}
+
+export default function BillerDepositCallbackPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="flex min-h-screen items-center justify-center px-6">
+          <div className="w-full max-w-sm rounded-2xl border border-line bg-surface p-8 text-center">
+            <p>Confirming your deposit…</p>
+          </div>
+        </main>
+      }
+    >
+      <BillerDepositCallbackInner />
+    </Suspense>
   );
 }

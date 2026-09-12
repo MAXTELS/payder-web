@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { api } from '@/lib/api-client';
@@ -8,8 +8,14 @@ import { Logo } from '@/components/Logo';
 
 /** Where a guest lands back after Paystack checkout — see
  * PaystackProvider.initializeGenericCharge's callbackPath in
- * BillerPaymentsService.initiateGuestPayment. */
-export default function PayBillCallbackPage() {
+ * BillerPaymentsService.initiateGuestPayment.
+ *
+ * useSearchParams() opts the page out of static rendering, so Next.js
+ * requires it to be wrapped in a Suspense boundary at the page level —
+ * otherwise `next build` fails with "useSearchParams() should be wrapped
+ * in a suspense boundary" during static export. The actual logic lives in
+ * PayBillCallbackInner; this file's default export just adds that boundary. */
+function PayBillCallbackInner() {
   const params = useSearchParams();
   const [status, setStatus] = useState<'checking' | 'success' | 'failed'>('checking');
 
@@ -40,5 +46,24 @@ export default function PayBillCallbackPage() {
         </Link>
       </div>
     </main>
+  );
+}
+
+export default function PayBillCallbackPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="flex min-h-screen items-center justify-center bg-surface-hover px-6">
+          <div className="w-full max-w-sm rounded-2xl border border-line bg-surface p-8 text-center">
+            <div className="mb-6 flex justify-center">
+              <Logo size="md" />
+            </div>
+            <p>Confirming your payment…</p>
+          </div>
+        </main>
+      }
+    >
+      <PayBillCallbackInner />
+    </Suspense>
   );
 }
