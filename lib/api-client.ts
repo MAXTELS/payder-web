@@ -491,6 +491,18 @@ export const api = {
       body: JSON.stringify({ reason }),
     }),
 
+  // Test-only: generates a throwaway RRR via Remita's own public demo
+  // credentials, for exercising the "Pay a Remita invoice" screen without a
+  // real biller-issued RRR. See backend RemitaDemoProvider's header comment
+  // for the important caveat about this being a DIFFERENT Remita product
+  // than the lookup/pay flow — a generated RRR is not guaranteed to be found
+  // by remitaLookup.
+  adminGenerateDemoRrr: (payload: { amount: number; payerName?: string; description?: string }) =>
+    apiFetch<{ rrr: string; orderId: string; amount: number }>(
+      '/admin/manual-payments/remita/generate-demo-rrr',
+      { method: 'POST', body: JSON.stringify(payload) },
+    ),
+
   // Manual bank-transfer wallet funding — customer transfers to one of the
   // static PAYDER accounts, then tells us. No ledger entry until an admin
   // approves (see backend WalletFundingService for why).
@@ -635,6 +647,17 @@ export const api = {
     apiFetch<{ transactionId?: string; pin?: string | null; status: string }>('/exams/pins', {
       method: 'POST',
       body: JSON.stringify(payload),
+    }),
+
+  // Admin: NECO's admin-set sell price — the ONLY source of what a customer
+  // is charged for a NECO pin (no PAYDER markup added on top of this, unlike
+  // WAEC). costPrice is optional/informational (what staff pay NECO itself).
+  adminGetNecoPrice: () =>
+    apiFetch<{ sellPrice: string; costPrice: string }>('/exams/admin/neco-price'),
+  adminSetNecoPrice: (sellPrice: number, costPrice?: number) =>
+    apiFetch<{ sellPrice: string; costPrice: string }>('/exams/admin/neco-price', {
+      method: 'PATCH',
+      body: JSON.stringify({ sellPrice, ...(costPrice !== undefined ? { costPrice } : {}) }),
     }),
 
   // Admin: staff management (ADMIN / CUSTOMER_CARE accounts).

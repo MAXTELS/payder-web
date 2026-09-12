@@ -15,6 +15,96 @@ interface Transaction {
 
 const STATUSES = ['', 'PENDING', 'PROCESSING', 'SUCCESS', 'FAILED', 'REVERSED'];
 
+// NECO has no live pin aggregator, so unlike WAEC (priced straight off
+// VTpass + PAYDER's fixed ₦1,000 margin) its price is whatever the admin
+// sets here — charged to the customer with NO markup added on top, since
+// the admin's own figure is already inclusive of whatever margin they want.
+// See backend ExamsService.getPricing/getOrCreateNecoProduct.
+function NecoPriceCard() {
+  const [sellPrice, setSellPrice] = useState('');
+  const [costPrice, setCostPrice] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [savedAt, setSavedAt] = useState<Date | null>(null);
+
+  useEffect(() => {
+    api
+      .adminGetNecoPrice()
+      .then((r) => {
+        setSellPrice(r.sellPrice);
+        setCostPrice(r.costPrice);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  async function save() {
+    const sell = Number(sellPrice);
+    if (!sell || sell <= 0) {
+      alert('Enter a valid sell price first.');
+      return;
+    }
+    const cost = costPrice ? Number(costPrice) : undefined;
+    setSaving(true);
+    try {
+      const r = await api.adminSetNecoPrice(sell, cost);
+      setSellPrice(r.sellPrice);
+      setCostPrice(r.costPrice);
+      setSavedAt(new Date());
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Could not save the NECO price.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="rounded border p-4">
+      <h2 className="text-sm font-semibold">NECO pin price</h2>
+      <p className="mt-1 max-w-2xl text-xs text-muted">
+        What a customer pays for a NECO result-checker pin right now — set this to whatever you
+        want the customer charged, margin already included. No extra PAYDER fee is added on top.
+      </p>
+      {loading ? (
+        <p className="mt-3 text-xs text-muted">Loading…</p>
+      ) : (
+        <div className="mt-3 flex flex-wrap items-end gap-2">
+          <label className="text-xs text-muted">
+            Sell price (₦, what the customer pays)
+            <input
+              className="mt-1 block w-40 rounded border px-2 py-1 text-sm"
+              type="number"
+              min="1"
+              value={sellPrice}
+              onChange={(e) => setSellPrice(e.target.value)}
+            />
+          </label>
+          <label className="text-xs text-muted">
+            Cost price (₦, optional — what NECO charges us)
+            <input
+              className="mt-1 block w-48 rounded border px-2 py-1 text-sm"
+              type="number"
+              min="0"
+              value={costPrice}
+              onChange={(e) => setCostPrice(e.target.value)}
+            />
+          </label>
+          <button
+            onClick={save}
+            disabled={saving}
+            className="rounded bg-black px-3 py-2 text-xs text-white disabled:opacity-50"
+          >
+            {saving ? 'Saving…' : 'Save price'}
+          </button>
+          {savedAt && (
+            <span className="text-xs text-muted">Saved {savedAt.toLocaleTimeString()}</span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function TransactionsPage() {
   const [status, setStatus] = useState('');
   const [rows, setRows] = useState<Transaction[]>([]);
@@ -52,6 +142,7 @@ export default function TransactionsPage() {
   return (
     <div className="flex flex-col gap-6">
       <h1 className="text-xl font-semibold">Transactions</h1>
+      <NecoPriceCard />
       <select
         className="w-48 rounded border px-3 py-2 text-sm"
         value={status}
