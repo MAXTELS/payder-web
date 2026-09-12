@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api-client';
 import { Logo } from '@/components/Logo';
+import { PageLoader } from '@/components/PageLoader';
 
 /**
  * Public entry point to the biller catalog — no login required. Categories
@@ -30,20 +31,24 @@ export default function PayBillCategoriesPage() {
           log in to pay from your wallet.
         </p>
 
-        <div className="mt-8 grid gap-3 sm:grid-cols-2">
-          {categories?.map((c) => (
-            <Link
-              key={c}
-              href={`/pay-bill/${encodeURIComponent(c)}`}
-              className="rounded-2xl border border-line bg-surface p-6 text-center font-medium transition hover:border-brand-orange"
-            >
-              {c}
-            </Link>
-          ))}
-          {categories && categories.length === 0 && (
-            <p className="col-span-2 text-center text-sm text-muted">No bills are available to pay right now.</p>
-          )}
-        </div>
+        {categories === null ? (
+          <PageLoader inline label="Loading categories…" />
+        ) : (
+          <div className="mt-8 grid gap-3 sm:grid-cols-2">
+            {categories.map((c) => (
+              <Link
+                key={c}
+                href={`/pay-bill/${encodeURIComponent(c)}`}
+                className="rounded-2xl border border-line bg-surface p-6 text-center font-medium transition hover:border-brand-orange"
+              >
+                {c}
+              </Link>
+            ))}
+            {categories.length === 0 && (
+              <p className="col-span-2 text-center text-sm text-muted">No bills are available to pay right now.</p>
+            )}
+          </div>
+        )}
 
         <p className="mt-8 text-center text-sm text-muted">
           Already have a PAYDER account?{' '}

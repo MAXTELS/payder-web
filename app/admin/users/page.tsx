@@ -3,9 +3,11 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { api, ApiError, SafeUser } from '@/lib/api-client';
+import { PageLoader } from '@/components/PageLoader';
 
 export default function UsersPage() {
   const [items, setItems] = useState<SafeUser[]>([]);
+  const [itemsLoading, setItemsLoading] = useState(true);
   const [total, setTotal] = useState(0);
   const [q, setQ] = useState('');
   const [role, setRole] = useState('');
@@ -20,6 +22,7 @@ export default function UsersPage() {
   const [tempPassword, setTempPassword] = useState<string | null>(null);
 
   function refresh() {
+    setItemsLoading(true);
     api
       .adminUsersList({ q: q || undefined, role: role || undefined, take: 100 })
       .then((res) => {
@@ -29,7 +32,8 @@ export default function UsersPage() {
       .catch(() => {
         setItems([]);
         setTotal(0);
-      });
+      })
+      .finally(() => setItemsLoading(false));
   }
 
   useEffect(refresh, [q, role]);
@@ -151,6 +155,9 @@ export default function UsersPage() {
         </select>
       </div>
 
+      {itemsLoading ? (
+        <PageLoader inline label="Loading users…" />
+      ) : (
       <div className="overflow-hidden rounded-xl border border-line bg-surface shadow-sm">
         <div className="overflow-x-auto">
         <table className="w-full text-left text-sm">
@@ -196,6 +203,7 @@ export default function UsersPage() {
         </table>
         </div>
       </div>
+      )}
     </div>
   );
 }

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { apiFetch } from '@/lib/api-client';
+import { PageLoader } from '@/components/PageLoader';
 
 interface Ticket {
   id: string;
@@ -12,11 +13,15 @@ interface Ticket {
 
 export default function SupportPage() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [ticketsLoading, setTicketsLoading] = useState(true);
   const [category, setCategory] = useState('general');
   const [message, setMessage] = useState('');
 
   function refresh() {
-    apiFetch<Ticket[]>('/support/tickets/mine').then(setTickets).catch(() => setTickets([]));
+    apiFetch<Ticket[]>('/support/tickets/mine')
+      .then(setTickets)
+      .catch(() => setTickets([]))
+      .finally(() => setTicketsLoading(false));
   }
 
   useEffect(refresh, []);
@@ -63,13 +68,17 @@ export default function SupportPage() {
 
       <div>
         <h2 className="mb-2 text-sm font-semibold text-muted">Your tickets</h2>
-        <ul className="flex flex-col gap-2">
-          {tickets.map((t) => (
-            <li key={t.id} className="rounded border p-3 text-sm">
-              <span className="font-medium">{t.category}</span> — {t.status}
-            </li>
-          ))}
-        </ul>
+        {ticketsLoading ? (
+          <PageLoader inline label="Loading your tickets…" />
+        ) : (
+          <ul className="flex flex-col gap-2">
+            {tickets.map((t) => (
+              <li key={t.id} className="rounded border p-3 text-sm">
+                <span className="font-medium">{t.category}</span> — {t.status}
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </div>
   );

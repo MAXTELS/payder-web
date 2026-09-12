@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { api, ApiError, BillerSummary, BillerUserSummary } from '@/lib/api-client';
+import { PageLoader } from '@/components/PageLoader';
 
 const BILLER_TYPES: { value: 'SCHOOL' | 'CONTRIBUTION' | 'OTHER'; label: string }[] = [
   { value: 'SCHOOL', label: 'School' },
@@ -29,6 +30,7 @@ const EMPTY_USER_ROW: UserFormRow = { email: '', phone: '', firstName: '', lastN
  */
 export default function AdminBillersPage() {
   const [billers, setBillers] = useState<BillerSummary[]>([]);
+  const [billersLoading, setBillersLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
 
@@ -45,7 +47,11 @@ export default function AdminBillersPage() {
   );
 
   function refresh() {
-    api.adminBillersList().then(setBillers).catch(() => setBillers([]));
+    api
+      .adminBillersList()
+      .then(setBillers)
+      .catch(() => setBillers([]))
+      .finally(() => setBillersLoading(false));
   }
 
   useEffect(refresh, []);
@@ -267,6 +273,9 @@ export default function AdminBillersPage() {
         </div>
       )}
 
+      {billersLoading ? (
+        <PageLoader inline label="Loading billers…" />
+      ) : (
       <div className="overflow-hidden rounded-xl border border-line bg-surface shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
@@ -331,6 +340,7 @@ export default function AdminBillersPage() {
           </table>
         </div>
       </div>
+      )}
     </div>
   );
 }

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { apiFetch } from '@/lib/api-client';
+import { PageLoader } from '@/components/PageLoader';
 
 interface Transaction {
   id: string;
@@ -16,11 +17,14 @@ const STATUSES = ['', 'PENDING', 'PROCESSING', 'SUCCESS', 'FAILED', 'REVERSED'];
 export default function TransactionsPage() {
   const [status, setStatus] = useState('');
   const [rows, setRows] = useState<Transaction[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    setLoading(true);
     apiFetch<Transaction[]>(`/admin/transactions${status ? `?status=${status}` : ''}`)
       .then(setRows)
-      .catch(() => setRows([]));
+      .catch(() => setRows([]))
+      .finally(() => setLoading(false));
   }, [status]);
 
   return (
@@ -37,6 +41,9 @@ export default function TransactionsPage() {
           </option>
         ))}
       </select>
+      {loading ? (
+        <PageLoader inline label="Loading transactions…" />
+      ) : (
       <div className="overflow-x-auto">
       <table className="w-full text-left text-sm">
         <thead>
@@ -59,6 +66,7 @@ export default function TransactionsPage() {
         </tbody>
       </table>
       </div>
+      )}
     </div>
   );
 }

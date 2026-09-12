@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { api, ApiError, manualPaymentReceiptUrl } from '@/lib/api-client';
 import { AmountInput } from '@/components/AmountInput';
+import { PageLoader } from '@/components/PageLoader';
 
 interface ManualPaymentRequestRow {
   id: string;
@@ -58,12 +59,14 @@ export default function ManualPaymentPage() {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const [mine, setMine] = useState<ManualPaymentRequestRow[]>([]);
+  const [mineLoading, setMineLoading] = useState(true);
 
   function refresh() {
     api
       .manualPaymentsMine()
       .then((rows) => setMine(rows as ManualPaymentRequestRow[]))
-      .catch(() => setMine([]));
+      .catch(() => setMine([]))
+      .finally(() => setMineLoading(false));
   }
 
   useEffect(refresh, []);
@@ -460,6 +463,9 @@ export default function ManualPaymentPage() {
 
       <div>
         <h2 className="mb-2 text-sm font-semibold text-muted">Your manual payment requests</h2>
+        {mineLoading ? (
+          <PageLoader inline label="Loading your requests…" />
+        ) : (
         <ul className="flex flex-col gap-2">
           {mine.map((r) => (
             <li key={r.id} className="flex items-center justify-between rounded border p-3 text-sm">
@@ -497,6 +503,7 @@ export default function ManualPaymentPage() {
           ))}
           {mine.length === 0 && <p className="text-sm text-faint">No requests yet.</p>}
         </ul>
+        )}
       </div>
     </div>
   );

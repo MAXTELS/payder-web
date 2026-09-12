@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { apiFetch } from '@/lib/api-client';
+import { PageLoader } from '@/components/PageLoader';
 
 interface KycRecord {
   id: string;
@@ -12,9 +13,13 @@ interface KycRecord {
 
 export default function KycReviewPage() {
   const [records, setRecords] = useState<KycRecord[]>([]);
+  const [loading, setLoading] = useState(true);
 
   function refresh() {
-    apiFetch<KycRecord[]>('/admin/kyc/pending').then(setRecords).catch(() => setRecords([]));
+    apiFetch<KycRecord[]>('/admin/kyc/pending')
+      .then(setRecords)
+      .catch(() => setRecords([]))
+      .finally(() => setLoading(false));
   }
 
   useEffect(refresh, []);
@@ -31,6 +36,9 @@ export default function KycReviewPage() {
   return (
     <div className="flex flex-col gap-6">
       <h1 className="text-xl font-semibold">KYC review queue</h1>
+      {loading ? (
+        <PageLoader inline label="Loading KYC queue…" />
+      ) : (
       <div className="overflow-x-auto">
       <table className="w-full text-left text-sm">
         <thead>
@@ -75,6 +83,7 @@ export default function KycReviewPage() {
         </tbody>
       </table>
       </div>
+      )}
     </div>
   );
 }

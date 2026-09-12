@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { getCurrentUser, Role, SessionUser } from '@/lib/auth';
+import { PageLoader } from './PageLoader';
 
 /**
  * Client-side gate so an admin/CC page doesn't even render for the wrong
@@ -42,6 +43,10 @@ export function RoleGuard({
     if (mounted && !authorized) router.replace('/login');
   }, [mounted, authorized, router]);
 
-  if (!authorized) return null;
+  // Previously returned null here — every role-gated page (admin, customer,
+  // biller, care) looked completely blank/stuck for the brief mount-check
+  // window (and, in practice, however long the redirect takes when the user
+  // isn't authorized). A spinner makes it visibly "loading" instead of idle.
+  if (!authorized) return <PageLoader />;
   return <>{children}</>;
 }

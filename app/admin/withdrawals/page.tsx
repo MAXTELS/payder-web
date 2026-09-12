@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { api, WithdrawalRequest } from '@/lib/api-client';
+import { PageLoader } from '@/components/PageLoader';
 
 type Row = WithdrawalRequest & {
   user: { email: string; firstName: string; lastName: string };
@@ -21,13 +22,16 @@ const STATUS_STYLES: Record<string, string> = {
 export default function AdminWithdrawalsPage() {
   const [status, setStatus] = useState('PENDING');
   const [rows, setRows] = useState<Row[]>([]);
+  const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   function refresh() {
+    setLoading(true);
     api
       .adminWithdrawalsQueue(status || undefined)
       .then((r) => setRows(r as Row[]))
-      .catch(() => setRows([]));
+      .catch(() => setRows([]))
+      .finally(() => setLoading(false));
   }
 
   useEffect(refresh, [status]);
@@ -77,6 +81,9 @@ export default function AdminWithdrawalsPage() {
           </option>
         ))}
       </select>
+      {loading ? (
+        <PageLoader inline label="Loading withdrawals queue…" />
+      ) : (
       <ul className="flex flex-col gap-3">
         {rows.map((r) => (
           <li key={r.id} className="rounded-xl border border-line bg-surface p-4 text-sm shadow-sm">
@@ -135,6 +142,7 @@ export default function AdminWithdrawalsPage() {
           </p>
         )}
       </ul>
+      )}
     </div>
   );
 }

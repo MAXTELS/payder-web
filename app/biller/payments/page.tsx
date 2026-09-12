@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { api, ApiError, BillDefinition, BillerPaymentRow, billerDailyReportUrl, billerPaymentsExportCsvUrl } from '@/lib/api-client';
+import { PageLoader } from '@/components/PageLoader';
 
 /** The protected CSV endpoints need the bearer token, which a plain <a href>
  * download link can't attach — fetch as a blob with the token and hand the
@@ -26,6 +27,7 @@ async function downloadWithAuth(url: string, filename: string) {
 export default function BillerPaymentsPage() {
   const [bill, setBill] = useState<BillDefinition | null>(null);
   const [payments, setPayments] = useState<BillerPaymentRow[]>([]);
+  const [paymentsLoading, setPaymentsLoading] = useState(true);
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
@@ -33,7 +35,12 @@ export default function BillerPaymentsPage() {
   const [prefMsg, setPrefMsg] = useState<string | null>(null);
 
   function refresh() {
-    api.billerListPayments({ from: from || undefined, to: to || undefined, extra: filters }).then(setPayments).catch(() => {});
+    setPaymentsLoading(true);
+    api
+      .billerListPayments({ from: from || undefined, to: to || undefined, extra: filters })
+      .then(setPayments)
+      .catch(() => {})
+      .finally(() => setPaymentsLoading(false));
   }
 
   useEffect(() => {
@@ -122,6 +129,9 @@ export default function BillerPaymentsPage() {
         </div>
       </div>
 
+      {paymentsLoading ? (
+        <PageLoader inline label="Loading payments…" />
+      ) : (
       <div className="overflow-x-auto rounded-2xl border border-line">
         <table className="w-full text-left text-sm">
           <thead className="bg-surface-hover">
@@ -157,6 +167,7 @@ export default function BillerPaymentsPage() {
           </tbody>
         </table>
       </div>
+      )}
     </div>
   );
 }

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { api, ApiError, BillDefinition, BillFieldInput } from '@/lib/api-client';
+import { PageLoader } from '@/components/PageLoader';
 
 function allCombinationKeys(fields: BillFieldInput[]): string[] {
   const selects = fields.filter((f) => f.type === 'SELECT' && (f.options?.length ?? 0) > 0);
@@ -104,7 +105,7 @@ export default function BillBuilderPage() {
     }
   }
 
-  if (!loaded) return null;
+  if (!loaded) return <PageLoader label="Loading your bill…" />;
 
   return (
     <div className="flex flex-col gap-6">

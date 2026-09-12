@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api-client';
+import { PageLoader } from '@/components/PageLoader';
 
 interface FundingRequest {
   id: string;
@@ -25,13 +26,16 @@ const STATUS_STYLES: Record<string, string> = {
 export default function AdminWalletFundingPage() {
   const [status, setStatus] = useState('PENDING');
   const [rows, setRows] = useState<FundingRequest[]>([]);
+  const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   function refresh() {
+    setLoading(true);
     api
       .adminWalletFundingQueue(status || undefined)
       .then((r) => setRows(r as FundingRequest[]))
-      .catch(() => setRows([]));
+      .catch(() => setRows([]))
+      .finally(() => setLoading(false));
   }
 
   useEffect(refresh, [status]);
@@ -79,6 +83,9 @@ export default function AdminWalletFundingPage() {
           </option>
         ))}
       </select>
+      {loading ? (
+        <PageLoader inline label="Loading wallet funding queue…" />
+      ) : (
       <ul className="flex flex-col gap-3">
         {rows.map((r) => (
           <li key={r.id} className="rounded-xl border border-line bg-surface p-4 text-sm shadow-sm">
@@ -128,6 +135,7 @@ export default function AdminWalletFundingPage() {
           </p>
         )}
       </ul>
+      )}
     </div>
   );
 }

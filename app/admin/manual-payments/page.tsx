@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api-client';
+import { PageLoader } from '@/components/PageLoader';
 
 interface ManualPaymentRequest {
   id: string;
@@ -18,13 +19,16 @@ const STATUSES = ['PENDING', 'PAID', 'REJECTED', ''];
 export default function AdminManualPaymentsPage() {
   const [status, setStatus] = useState('PENDING');
   const [rows, setRows] = useState<ManualPaymentRequest[]>([]);
+  const [loading, setLoading] = useState(true);
   const [refs, setRefs] = useState<Record<string, string>>({});
 
   function refresh() {
+    setLoading(true);
     api
       .adminManualPaymentsQueue(status || undefined)
       .then((r) => setRows(r as ManualPaymentRequest[]))
-      .catch(() => setRows([]));
+      .catch(() => setRows([]))
+      .finally(() => setLoading(false));
   }
 
   useEffect(refresh, [status]);
@@ -68,6 +72,9 @@ export default function AdminManualPaymentsPage() {
           </option>
         ))}
       </select>
+      {loading ? (
+        <PageLoader inline label="Loading queue…" />
+      ) : (
       <ul className="flex flex-col gap-3">
         {rows.map((r) => (
           <li key={r.id} className="rounded border p-4 text-sm">
@@ -111,6 +118,7 @@ export default function AdminManualPaymentsPage() {
           <p className="py-6 text-center text-sm text-faint">Nothing here.</p>
         )}
       </ul>
+      )}
     </div>
   );
 }

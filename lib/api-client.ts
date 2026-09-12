@@ -133,6 +133,44 @@ function getToken(): string | null {
   return window.localStorage.getItem('payder_access_token');
 }
 
+// Access tokens are short-lived (15m — see backend JWT_ACCESS_TTL), so a
+// session left open longer than that is the *expected* steady state, not an
+// error. Despite this file's header comment claiming 401s are "handled
+// uniformly," there was previously no refresh logic here at all — every
+// authenticated call (funding via Paystack included) just threw
+// "Unauthorized" the moment the access token aged out, forcing a full
+// re-login for something as simple as a stale tab. This mirrors the mobile
+// app's ApiClient interceptor: on a 401, silently exchange the refresh token
+// for a new pair and retry the original request once. Concurrent 401s share
+// one in-flight refresh instead of each racing to refresh separately.
+let refreshPromise: Promise<string | null> | null = null;
+
+function refreshAccessToken(): Promise<string | null> {
+  if (typeof window === 'undefined') return Promise.resolve(null);
+  const storedRefreshToken = window.localStorage.getItem('payder_refresh_token');
+  if (!storedRefreshToken) return Promise.resolve(null);
+
+  if (!refreshPromise) {
+    refreshPromise = fetch(`${API_BASE_URL}/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken: storedRefreshToken }),
+    })
+      .then(async (res) => {
+        if (!res.ok) return null;
+        const body = await res.json();
+        window.localStorage.setItem('payder_access_token', body.accessToken);
+        window.localStorage.setItem('payder_refresh_token', body.refreshToken);
+        return body.accessToken as string;
+      })
+      .catch(() => null)
+      .finally(() => {
+        refreshPromise = null;
+      });
+  }
+  return refreshPromise;
+}
+
 export async function apiFetch<T>(
   path: string,
   options: RequestInit & { auth?: boolean } = {},
@@ -140,14 +178,33 @@ export async function apiFetch<T>(
   const { auth = true, headers, ...rest } = options;
   const token = auth ? getToken() : null;
 
-  const res = await fetch(`${API_BASE_URL}${path}`, {
-    ...rest,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...headers,
-    },
-  });
+  const doFetch = (accessToken: string | null) =>
+    fetch(`${API_BASE_URL}${path}`, {
+      ...rest,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        ...headers,
+      },
+    });
+
+  let res = await doFetch(token);
+
+  // Only attempt a refresh-and-retry for an authenticated call that actually
+  // sent a token and got rejected — not for public calls, and not for the
+  // login/refresh endpoints themselves (that would loop).
+  if (res.status === 401 && auth && token && path !== '/auth/refresh' && path !== '/auth/login') {
+    const newToken = await refreshAccessToken();
+    if (newToken) {
+      res = await doFetch(newToken);
+    } else if (typeof window !== 'undefined') {
+      // The refresh token is gone or expired too — clear the dead session so
+      // the next navigation bounces to login instead of retrying forever
+      // with tokens that will never work.
+      window.localStorage.removeItem('payder_access_token');
+      window.localStorage.removeItem('payder_refresh_token');
+    }
+  }
 
   if (!res.ok) {
     let message = res.statusText;

@@ -3,9 +3,11 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { api, ApiError, SafeUser } from '@/lib/api-client';
+import { PageLoader } from '@/components/PageLoader';
 
 export default function StaffPage() {
   const [staff, setStaff] = useState<SafeUser[]>([]);
+  const [staffLoading, setStaffLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
 
@@ -20,7 +22,11 @@ export default function StaffPage() {
   const [passwordMessage, setPasswordMessage] = useState<string | null>(null);
 
   function refresh() {
-    api.adminStaffList().then(setStaff).catch(() => setStaff([]));
+    api
+      .adminStaffList()
+      .then(setStaff)
+      .catch(() => setStaff([]))
+      .finally(() => setStaffLoading(false));
   }
 
   useEffect(refresh, []);
@@ -186,6 +192,9 @@ export default function StaffPage() {
         </form>
       )}
 
+      {staffLoading ? (
+        <PageLoader inline label="Loading staff…" />
+      ) : (
       <div className="overflow-hidden rounded-xl border border-line bg-surface shadow-sm">
         <div className="overflow-x-auto">
         <table className="w-full text-left text-sm">
@@ -262,6 +271,7 @@ export default function StaffPage() {
         </table>
         </div>
       </div>
+      )}
     </div>
   );
 }

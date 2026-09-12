@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { api } from '@/lib/api-client';
 import { Logo } from '@/components/Logo';
+import { PageLoader } from '@/components/PageLoader';
 
 export default function PayBillCategoryBillersPage() {
   const params = useParams<{ type: string }>();
@@ -12,6 +13,7 @@ export default function PayBillCategoryBillersPage() {
   const [billers, setBillers] = useState<{ id: string; name: string; bill: { name: string } }[] | null>(null);
 
   useEffect(() => {
+    setBillers(null);
     api.billPayBillersByCategory(type).then(setBillers).catch(() => setBillers([]));
   }, [type]);
 
@@ -28,21 +30,25 @@ export default function PayBillCategoryBillersPage() {
         </p>
         <h1 className="mt-2 text-xl font-semibold">{type}</h1>
 
-        <div className="mt-6 flex flex-col gap-3">
-          {billers?.map((b) => (
-            <Link
-              key={b.id}
-              href={`/pay-bill/biller/${b.id}`}
-              className="rounded-2xl border border-line bg-surface p-5 transition hover:border-brand-orange"
-            >
-              <p className="font-medium">{b.name}</p>
-              <p className="text-sm text-muted">{b.bill.name}</p>
-            </Link>
-          ))}
-          {billers && billers.length === 0 && (
-            <p className="text-sm text-muted">No billers available in this category right now.</p>
-          )}
-        </div>
+        {billers === null ? (
+          <PageLoader inline label="Loading billers…" />
+        ) : (
+          <div className="mt-6 flex flex-col gap-3">
+            {billers.map((b) => (
+              <Link
+                key={b.id}
+                href={`/pay-bill/biller/${b.id}`}
+                className="rounded-2xl border border-line bg-surface p-5 transition hover:border-brand-orange"
+              >
+                <p className="font-medium">{b.name}</p>
+                <p className="text-sm text-muted">{b.bill.name}</p>
+              </Link>
+            ))}
+            {billers.length === 0 && (
+              <p className="text-sm text-muted">No billers available in this category right now.</p>
+            )}
+          </div>
+        )}
       </div>
     </main>
   );

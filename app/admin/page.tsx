@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api-client';
+import { PageLoader } from '@/components/PageLoader';
 
 type TotalBalance = Awaited<ReturnType<typeof api.adminTotalCustomerBalance>>;
 type NetBalance = Awaited<ReturnType<typeof api.adminNetBalance>>;
@@ -81,6 +82,8 @@ export default function AdminOverviewPage() {
 
         {netError && <p className="text-sm text-red-600">{netError}</p>}
 
+        {netLoading && !netBalance && !netError && <PageLoader inline label="Loading net balance…" />}
+
         {netBalance && !netError && (
           <div className="grid gap-4 sm:grid-cols-3">
             <div className="rounded-xl bg-gradient-to-br from-brand-navy to-brand-navy-light p-5 text-white shadow-sm sm:col-span-1">
@@ -132,6 +135,8 @@ export default function AdminOverviewPage() {
         </div>
 
         {chargesError && <p className="text-sm text-red-600">{chargesError}</p>}
+
+        {chargesLoading && !charges && !chargesError && <PageLoader inline label="Loading portal charges…" />}
 
         {charges && !chargesError && (
           <div className="flex flex-col gap-4">
@@ -191,6 +196,8 @@ export default function AdminOverviewPage() {
         </div>
 
         {error && <p className="text-sm text-red-600">{error}</p>}
+
+        {loading && !totals && !error && <PageLoader inline label="Loading customer balances…" />}
 
         {totals && !error && (
           <div className="grid gap-4 sm:grid-cols-3">

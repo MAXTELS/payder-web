@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { api, AuditLogEntry } from '@/lib/api-client';
+import { PageLoader } from '@/components/PageLoader';
 
 const ENTITY_FILTERS = ['', 'User', 'KycRecord', 'Provider', 'Wallet'];
 
@@ -11,13 +12,16 @@ function AuditLogContent() {
   const actorId = searchParams.get('actorId') ?? undefined;
 
   const [logs, setLogs] = useState<AuditLogEntry[]>([]);
+  const [loading, setLoading] = useState(true);
   const [targetEntity, setTargetEntity] = useState('');
 
   function refresh() {
+    setLoading(true);
     api
       .adminAuditLogs({ actorId, targetEntity: targetEntity || undefined, take: 100 })
       .then(setLogs)
-      .catch(() => setLogs([]));
+      .catch(() => setLogs([]))
+      .finally(() => setLoading(false));
   }
 
   useEffect(refresh, [actorId, targetEntity]);
@@ -44,6 +48,9 @@ function AuditLogContent() {
         ))}
       </select>
 
+      {loading ? (
+        <PageLoader inline label="Loading audit log…" />
+      ) : (
       <div className="overflow-hidden rounded-xl border border-line bg-surface shadow-sm">
         <div className="overflow-x-auto">
         <table className="w-full text-left text-sm">
@@ -85,6 +92,7 @@ function AuditLogContent() {
         </table>
         </div>
       </div>
+      )}
     </div>
   );
 }

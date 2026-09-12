@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { apiFetch } from '@/lib/api-client';
+import { PageLoader } from '@/components/PageLoader';
 
 interface Ticket {
   id: string;
@@ -13,10 +14,14 @@ interface Ticket {
 
 export default function CarePage() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [loading, setLoading] = useState(true);
   const [replies, setReplies] = useState<Record<string, string>>({});
 
   function refresh() {
-    apiFetch<Ticket[]>('/support/tickets/queue').then(setTickets).catch(() => setTickets([]));
+    apiFetch<Ticket[]>('/support/tickets/queue')
+      .then(setTickets)
+      .catch(() => setTickets([]))
+      .finally(() => setLoading(false));
   }
 
   useEffect(refresh, []);
@@ -41,6 +46,9 @@ export default function CarePage() {
           PIN-locked wallet) — anything else escalates to admin. See architecture doc §10.
         </p>
       </div>
+      {loading ? (
+        <PageLoader inline label="Loading queue…" />
+      ) : (
       <ul className="flex flex-col gap-3">
         {tickets.map((t) => (
           <li
@@ -75,6 +83,7 @@ export default function CarePage() {
           </p>
         )}
       </ul>
+      )}
     </div>
   );
 }

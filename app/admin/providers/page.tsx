@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { apiFetch } from '@/lib/api-client';
+import { PageLoader } from '@/components/PageLoader';
 
 interface Provider {
   id: string;
@@ -13,9 +14,13 @@ interface Provider {
 
 export default function ProvidersPage() {
   const [providers, setProviders] = useState<Provider[]>([]);
+  const [loading, setLoading] = useState(true);
 
   function refresh() {
-    apiFetch<Provider[]>('/admin/providers').then(setProviders).catch(() => setProviders([]));
+    apiFetch<Provider[]>('/admin/providers')
+      .then(setProviders)
+      .catch(() => setProviders([]))
+      .finally(() => setLoading(false));
   }
 
   useEffect(refresh, []);
@@ -36,6 +41,9 @@ export default function ProvidersPage() {
         if it starts erroring). Pricing/markup editing per product is the
         next piece to build here — see architecture doc §7 (ProductCatalog).
       </p>
+      {loading ? (
+        <PageLoader inline label="Loading providers…" />
+      ) : (
       <div className="overflow-x-auto">
       <table className="w-full text-left text-sm">
         <thead>
@@ -67,6 +75,7 @@ export default function ProvidersPage() {
         </tbody>
       </table>
       </div>
+      )}
     </div>
   );
 }
