@@ -6,9 +6,11 @@ import { Sidebar, SidebarNavItem } from '@/components/Sidebar';
 const NAV: SidebarNavItem[] = [
   { href: '/dashboard', label: 'Dashboard' },
   { href: '/wallet', label: 'Wallet' },
+  { href: '/transactions', label: 'Transaction history' },
   { href: '/bills', label: 'Bills' },
   { href: '/bills/manual-payment', label: 'Remita / eTranzact' },
   { href: '/airtime', label: 'Airtime & Data' },
+  { href: '/betting', label: 'Betting' },
   { href: '/exams', label: 'Exam pins' },
   { href: '/kyc', label: 'Identity verification' },
   { href: '/support', label: 'Support' },

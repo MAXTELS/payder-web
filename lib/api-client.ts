@@ -221,6 +221,27 @@ export async function apiFetch<T>(
   return res.json();
 }
 
+// Same auth/refresh handling as apiFetch, but for a non-JSON download (the
+// Transaction History page's CSV export) — returns the raw Blob instead of
+// parsing a body that isn't JSON in the first place.
+async function apiFetchBlob(path: string): Promise<Blob> {
+  const token = getToken();
+  const doFetch = (accessToken: string | null) =>
+    fetch(`${API_BASE_URL}${path}`, {
+      headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+    });
+
+  let res = await doFetch(token);
+  if (res.status === 401 && token) {
+    const newToken = await refreshAccessToken();
+    if (newToken) res = await doFetch(newToken);
+  }
+  if (!res.ok) {
+    throw new ApiError(res.status, res.statusText);
+  }
+  return res.blob();
+}
+
 export const api = {
   login: (identifier: string, password: string) =>
     apiFetch<{ accessToken: string; refreshToken: string }>('/auth/login', {
@@ -274,10 +295,21 @@ export const api = {
       virtualAccountBank: string | null;
       virtualAccountProvider: string | null;
     }>('/wallet/balance'),
-  walletStatement: (params?: { limit?: number; cursor?: string }) => {
+  walletStatement: (params?: {
+    limit?: number;
+    cursor?: string;
+    type?: string;
+    status?: string;
+    from?: string;
+    to?: string;
+  }) => {
     const qs = new URLSearchParams();
     if (params?.limit) qs.set('limit', String(params.limit));
     if (params?.cursor) qs.set('cursor', params.cursor);
+    if (params?.type) qs.set('type', params.type);
+    if (params?.status) qs.set('status', params.status);
+    if (params?.from) qs.set('from', params.from);
+    if (params?.to) qs.set('to', params.to);
     const suffix = qs.toString() ? `?${qs.toString()}` : '';
     return apiFetch<{
       items: {
@@ -286,11 +318,26 @@ export const api = {
         status: string;
         amount: string;
         fee: string;
+        providerReference: string | null;
+        metadata: Record<string, unknown> | null;
         createdAt: string;
         completedAt: string | null;
       }[];
       nextCursor: string | null;
     }>(`/wallet/statement${suffix}`);
+  },
+  // Downloads the same filtered set as walletStatement, but every matching
+  // row in one CSV file rather than one cursor-page of JSON — see backend
+  // WalletController.exportStatement. Returns a Blob; the caller (the
+  // Transaction History page) turns it into a client-side download.
+  walletStatementExport: (params?: { type?: string; status?: string; from?: string; to?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.type) qs.set('type', params.type);
+    if (params?.status) qs.set('status', params.status);
+    if (params?.from) qs.set('from', params.from);
+    if (params?.to) qs.set('to', params.to);
+    const suffix = qs.toString() ? `?${qs.toString()}` : '';
+    return apiFetchBlob(`/wallet/statement/export${suffix}`);
   },
   provisionVirtualAccount: () =>
     apiFetch<{ accountNumber: string; bankName: string }>('/payments/virtual-account', {
@@ -326,6 +373,23 @@ export const api = {
   // Polled while a purchase is PROCESSING (VTpass responded "pending").
   billsStatus: (transactionId: string) =>
     apiFetch<{ id: string; status: string }>(`/bills/${encodeURIComponent(transactionId)}/status`),
+
+  // Betting-account funding via Pairgate — see backend BettingService/
+  // PairgateProvider. Mirrors the bills* shape above (list -> verify ->
+  // fund -> status) rather than reusing it, since betting has no
+  // serviceId/variationCode pair, just a provider id and account id.
+  bettingProviders: () => apiFetch<{ id: string; name: string }[]>('/betting/providers'),
+  bettingVerify: (providerId: string, customerId: string) =>
+    apiFetch<{ valid: boolean; customerName?: string }>(
+      `/betting/verify?providerId=${encodeURIComponent(providerId)}&customerId=${encodeURIComponent(customerId)}`,
+    ),
+  bettingFund: (dto: { providerId: string; customerId: string; amount: string }) =>
+    apiFetch<{ id: string; status: string; providerReference?: string }>('/betting/fund', {
+      method: 'POST',
+      body: JSON.stringify(dto),
+    }),
+  bettingStatus: (transactionId: string) =>
+    apiFetch<{ id: string; status: string }>(`/betting/${encodeURIComponent(transactionId)}/status`),
 
   // Paystack instant funding — runs alongside manual bank transfer, not in
   // place of it. `fund` starts checkout and returns a URL to redirect the

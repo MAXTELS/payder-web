@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api-client';
 import { EyeToggle } from '@/components/EyeToggle';
-import { formatWithCommas } from '@/lib/format';
+import { formatWithCommas, TRANSACTION_TYPE_LABELS, TRANSACTION_STATUS_STYLES } from '@/lib/format';
 
 type Balance = Awaited<ReturnType<typeof api.walletBalance>>;
 type Statement = Awaited<ReturnType<typeof api.walletStatement>>;
@@ -14,26 +14,11 @@ const QUICK_ACTIONS = [
   { href: '/wallet', label: 'Fund wallet' },
   { href: '/airtime', label: 'Buy airtime / data' },
   { href: '/bills', label: 'Pay a bill' },
+  { href: '/betting', label: 'Fund betting account' },
   { href: '/bills/manual-payment', label: 'Pay Remita / eTranzact' },
   { href: '/exams', label: 'Buy exam e-pin' },
   { href: '/support', label: 'Get support' },
 ];
-
-const TYPE_LABELS: Record<string, string> = {
-  WALLET_FUNDING: 'Wallet funding',
-  BILL_PAYMENT: 'Bill payment',
-  AIRTIME_PURCHASE: 'Airtime/data purchase',
-  EXAM_PIN_PURCHASE: 'Exam e-pin purchase',
-  TRANSFER: 'Transfer',
-};
-
-const STATUS_STYLES: Record<string, string> = {
-  SUCCESS: 'text-green-700 bg-green-50 dark:text-green-400 dark:bg-green-900/30',
-  PENDING: 'text-amber-700 bg-amber-50 dark:text-amber-400 dark:bg-amber-900/30',
-  PROCESSING: 'text-amber-700 bg-amber-50 dark:text-amber-400 dark:bg-amber-900/30',
-  FAILED: 'text-red-700 bg-red-50 dark:text-red-400 dark:bg-red-900/30',
-  REVERSED: 'text-neutral-700 bg-surface-hover',
-};
 
 export default function DashboardPage() {
   const [balance, setBalance] = useState<Balance | null>(null);
@@ -136,7 +121,12 @@ export default function DashboardPage() {
       </div>
 
       <div>
-        <p className="mb-3 text-sm font-medium text-muted">Recent transactions</p>
+        <div className="mb-3 flex items-center justify-between">
+          <p className="text-sm font-medium text-muted">Recent transactions</p>
+          <Link href="/transactions" className="text-sm font-medium text-brand-orange hover:underline">
+            View all →
+          </Link>
+        </div>
         {loadingStatement ? (
           <p className="text-sm text-faint">Loading…</p>
         ) : !statement || statement.items.length === 0 ? (
@@ -151,16 +141,16 @@ export default function DashboardPage() {
                 {statement.items.map((tx) => (
                   <tr key={tx.id} className="border-b border-line last:border-0">
                     <td className="px-4 py-3">
-                      <p className="text-foreground">{TYPE_LABELS[tx.type] ?? tx.type}</p>
+                      <p className="text-foreground">{TRANSACTION_TYPE_LABELS[tx.type] ?? tx.type}</p>
                       <p className="text-xs text-faint">
                         {new Date(tx.createdAt).toLocaleString()}
                       </p>
                     </td>
-                    <td className="px-4 py-3 text-right font-medium text-foreground">{tx.amount}</td>
+                    <td className="px-4 py-3 text-right font-medium text-foreground">₦{tx.amount}</td>
                     <td className="px-4 py-3 text-right">
                       <span
                         className={`rounded-full px-2 py-1 text-xs font-medium ${
-                          STATUS_STYLES[tx.status] ?? 'bg-surface-hover text-neutral-700'
+                          TRANSACTION_STATUS_STYLES[tx.status] ?? 'bg-surface-hover text-neutral-700'
                         }`}
                       >
                         {tx.status}
