@@ -10,7 +10,7 @@ interface Transaction {
   status: string;
   amount: string;
   createdAt: string;
-  metadata?: { fulfillment?: string } | null;
+  metadata?: { fulfillment?: string; examType?: string; deliveryEmail?: string } | null;
 }
 
 const STATUSES = ['', 'PENDING', 'PROCESSING', 'SUCCESS', 'FAILED', 'REVERSED'];
@@ -105,11 +105,102 @@ function NecoPriceCard() {
   );
 }
 
+// NECO has no live pin aggregator (see backend ExamsService's header
+// comment) — a NECO purchase is left PROCESSING with metadata.fulfillment
+// === 'manual' until staff buy the actual pin from NECO's own portal and
+// enter it here. Replaces the old bare `prompt()` flow with a proper form:
+// the pin, an email (pre-filled with whatever the customer typed on the
+// exam-pins form, editable in case staff need to redirect it), and a
+// freeform note that's folded into the same confirmation email as a
+// highlighted callout — for a "sorry for the wait, here's what happened"
+// kind of message rather than just the bare pin.
+function NecoFulfillForm({ transaction, onDone }: { transaction: Transaction; onDone: () => void }) {
+  const [pin, setPin] = useState('');
+  const [email, setEmail] = useState(transaction.metadata?.deliveryEmail ?? '');
+  const [message, setMessage] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!pin.trim()) {
+      setError('Enter the pin NECO gave you.');
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await api.adminExamFulfill(transaction.id, pin.trim(), email.trim() || undefined, message.trim() || undefined);
+      onDone();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not deliver the pin.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <tr className="border-b bg-surface-hover">
+      <td colSpan={5} className="p-4">
+        <form onSubmit={submit} className="flex max-w-md flex-col gap-2">
+          <label className="text-xs text-muted">
+            NECO pin
+            <input
+              className="mt-1 block w-full rounded border px-2 py-1.5 text-sm"
+              value={pin}
+              onChange={(e) => setPin(e.target.value)}
+              placeholder="The pin you bought from NECO's portal"
+              autoFocus
+            />
+          </label>
+          <label className="text-xs text-muted">
+            Confirmation email
+            <input
+              type="email"
+              className="mt-1 block w-full rounded border px-2 py-1.5 text-sm"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="Defaults to what the customer entered"
+            />
+          </label>
+          <label className="text-xs text-muted">
+            Message to include (optional)
+            <textarea
+              className="mt-1 block w-full rounded border px-2 py-1.5 text-sm"
+              rows={2}
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              placeholder="e.g. Sorry for the delay — thanks for your patience!"
+            />
+          </label>
+          {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
+          <div className="flex gap-2">
+            <button
+              type="submit"
+              disabled={busy}
+              className="rounded bg-black px-3 py-1.5 text-xs text-white disabled:opacity-50"
+            >
+              {busy ? 'Sending…' : 'Send pin & confirmation email'}
+            </button>
+            <button
+              type="button"
+              onClick={onDone}
+              className="rounded border px-3 py-1.5 text-xs text-muted"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      </td>
+    </tr>
+  );
+}
+
 export default function TransactionsPage() {
   const [status, setStatus] = useState('');
   const [rows, setRows] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
-  const [busyId, setBusyId] = useState<string | null>(null);
+  const [fulfillingId, setFulfillingId] = useState<string | null>(null);
 
   function refresh() {
     setLoading(true);
@@ -120,24 +211,6 @@ export default function TransactionsPage() {
   }
 
   useEffect(refresh, [status]);
-
-  // NECO has no live pin aggregator (see backend ExamsService's header
-  // comment) — a NECO purchase is left PROCESSING with metadata.fulfillment
-  // === 'manual' until staff buy the actual pin from NECO's own portal and
-  // enter it here.
-  async function deliverPin(id: string) {
-    const pin = prompt('Enter the NECO pin to deliver to the customer:');
-    if (!pin) return;
-    setBusyId(id);
-    try {
-      await api.adminExamFulfill(id, pin);
-      refresh();
-    } catch (err) {
-      alert(err instanceof Error ? err.message : 'Could not deliver the pin.');
-    } finally {
-      setBusyId(null);
-    }
-  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -173,23 +246,34 @@ export default function TransactionsPage() {
             const needsManualFulfillment =
               t.type === 'EXAM_PIN' && t.status === 'PROCESSING' && t.metadata?.fulfillment === 'manual';
             return (
-              <tr key={t.id} className="border-b">
-                <td className="py-2">{t.type}</td>
-                <td>{t.status}</td>
-                <td>{t.amount}</td>
-                <td>{new Date(t.createdAt).toLocaleString()}</td>
-                <td>
-                  {needsManualFulfillment && (
-                    <button
-                      onClick={() => deliverPin(t.id)}
-                      disabled={busyId === t.id}
-                      className="rounded bg-black px-3 py-1 text-xs text-white disabled:opacity-50"
-                    >
-                      Deliver NECO pin
-                    </button>
-                  )}
-                </td>
-              </tr>
+              <>
+                <tr key={t.id} className="border-b">
+                  <td className="py-2">{t.type}</td>
+                  <td>{t.status}</td>
+                  <td>{t.amount}</td>
+                  <td>{new Date(t.createdAt).toLocaleString()}</td>
+                  <td>
+                    {needsManualFulfillment && (
+                      <button
+                        onClick={() => setFulfillingId(fulfillingId === t.id ? null : t.id)}
+                        className="rounded bg-black px-3 py-1 text-xs text-white"
+                      >
+                        {fulfillingId === t.id ? 'Close' : 'Deliver NECO pin'}
+                      </button>
+                    )}
+                  </td>
+                </tr>
+                {fulfillingId === t.id && (
+                  <NecoFulfillForm
+                    key={`${t.id}-form`}
+                    transaction={t}
+                    onDone={() => {
+                      setFulfillingId(null);
+                      refresh();
+                    }}
+                  />
+                )}
+              </>
             );
           })}
         </tbody>
