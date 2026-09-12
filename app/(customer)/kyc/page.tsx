@@ -46,7 +46,9 @@ export default function KycPage() {
       const res = await api.kycRequestOtp(channel);
       setOtpRequested(true);
       setOtpMessage(
-        `Code sent to your ${channel === 'EMAIL' ? 'email' : 'phone'} — expires in ${res.expiresInMinutes} minutes. (Delivery isn't wired up to a real provider yet, so ask an admin to check the backend server log for the code.)`,
+        res.delivered
+          ? `Code sent to your ${channel === 'EMAIL' ? 'email' : 'phone'} — expires in ${res.expiresInMinutes} minutes.`
+          : `Code sent to your ${channel === 'EMAIL' ? 'email' : 'phone'} — expires in ${res.expiresInMinutes} minutes. (Delivery isn't wired up to a real provider yet, so ask an admin to check the backend server log for the code.)`,
       );
     } catch (err) {
       setOtpMessage(err instanceof ApiError ? err.message : 'Could not send code.');

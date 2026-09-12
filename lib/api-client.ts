@@ -538,10 +538,13 @@ export const api = {
       } | null;
     }>('/kyc/me'),
   kycRequestOtp: (channel: 'EMAIL' | 'PHONE') =>
-    apiFetch<{ sent: boolean; channel: string; expiresInMinutes: number }>('/kyc/otp/request', {
-      method: 'POST',
-      body: JSON.stringify({ channel }),
-    }),
+    apiFetch<{ sent: boolean; delivered: boolean; channel: string; expiresInMinutes: number }>(
+      '/kyc/otp/request',
+      {
+        method: 'POST',
+        body: JSON.stringify({ channel }),
+      },
+    ),
   kycConfirmOtp: (channel: 'EMAIL' | 'PHONE', code: string) =>
     apiFetch<{ verified: boolean; channel: string }>('/kyc/otp/confirm', {
       method: 'POST',
