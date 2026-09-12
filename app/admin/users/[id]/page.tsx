@@ -258,11 +258,53 @@ export default function UserDetailPage() {
         {kycRecords.length === 0 ? (
           <p className="text-sm text-faint">No KYC submissions.</p>
         ) : (
-          <ul className="flex flex-col gap-2">
+          <ul className="flex flex-col gap-3">
             {kycRecords.map((k) => (
               <li key={k.id} className="rounded-xl border border-line bg-surface p-4 text-sm">
-                {k.tier} · {k.status} · {new Date(k.createdAt).toLocaleDateString()}
-                {k.rejectionReason && <p className="text-xs text-red-600 dark:text-red-400">Rejected: {k.rejectionReason}</p>}
+                <p className="font-medium text-foreground">
+                  {k.tier} · {k.status} · {new Date(k.createdAt).toLocaleDateString()}
+                </p>
+                {k.rejectionReason && (
+                  <p className="text-xs text-red-600 dark:text-red-400">Rejected: {k.rejectionReason}</p>
+                )}
+                <dl className="mt-2 grid grid-cols-1 gap-2 text-xs sm:grid-cols-2">
+                  <div>
+                    <dt className="text-muted">Date of birth</dt>
+                    <dd className="text-foreground">
+                      {k.dateOfBirth ? new Date(k.dateOfBirth).toLocaleDateString() : '—'}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted">NIN</dt>
+                    <dd className="font-mono text-foreground">{k.nin ?? '—'}</dd>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <dt className="text-muted">Address</dt>
+                    <dd className="text-foreground">{k.address ?? '—'}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted">ID document</dt>
+                    <dd className="text-foreground">
+                      {k.documentUrl ? (
+                        <a href={k.documentUrl} target="_blank" rel="noreferrer" className="underline">
+                          View upload
+                        </a>
+                      ) : (
+                        'Not submitted'
+                      )}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted">Liveness check</dt>
+                    <dd className="text-foreground">{k.livenessResult ?? 'Not run'}</dd>
+                  </div>
+                  {k.verifiedAt && (
+                    <div>
+                      <dt className="text-muted">Reviewed</dt>
+                      <dd className="text-foreground">{new Date(k.verifiedAt).toLocaleString()}</dd>
+                    </div>
+                  )}
+                </dl>
               </li>
             ))}
           </ul>

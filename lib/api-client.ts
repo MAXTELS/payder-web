@@ -617,6 +617,26 @@ export const api = {
   kycSubmit: (payload: { dateOfBirth: string; address: string; nin: string }) =>
     apiFetch('/kyc/submit', { method: 'POST', body: JSON.stringify(payload) }),
 
+  // Exam pins: WAEC/NECO are priced entirely server-side (real price +
+  // PAYDER's fixed ₦1,000 margin) — examsPricing is the read-only preview
+  // the page shows before the customer commits; examsBuyPin re-derives the
+  // same figure itself rather than trusting this round-trip. JAMB isn't
+  // wired into backend pricing yet, so its preview comes back with null
+  // prices and the page still collects an amount for it.
+  examsPricing: (examType: 'waec' | 'neco' | 'jamb') =>
+    apiFetch<{
+      examType: string;
+      realPrice: string | null;
+      markup: string;
+      totalPrice: string | null;
+      variationCode: string | null;
+    }>(`/exams/pricing?examType=${examType}`),
+  examsBuyPin: (payload: { examType: 'waec' | 'neco' | 'jamb'; phone: string; amount?: string }) =>
+    apiFetch<{ transactionId?: string; pin?: string | null; status: string }>('/exams/pins', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
   // Admin: staff management (ADMIN / CUSTOMER_CARE accounts).
   adminStaffList: () => apiFetch<SafeUser[]>('/admin/staff'),
   adminStaffCreate: (payload: {
@@ -640,6 +660,15 @@ export const api = {
     apiFetch<SafeUser>(`/admin/staff/${id}/role`, {
       method: 'PATCH',
       body: JSON.stringify({ role }),
+    }),
+
+  // Admin: completes a manually-fulfilled NECO exam pin once staff have
+  // bought the actual pin from NECO's own portal (see backend
+  // AdminService.fulfillExamPin — NECO has no live aggregator yet).
+  adminExamFulfill: (transactionId: string, pin: string) =>
+    apiFetch(`/admin/exams/${transactionId}/fulfill`, {
+      method: 'PATCH',
+      body: JSON.stringify({ pin }),
     }),
 
   // Admin: audit log — every admin/staff action, filterable by actor.
@@ -679,6 +708,12 @@ export const api = {
         status: string;
         createdAt: string;
         rejectionReason: string | null;
+        dateOfBirth: string | null;
+        address: string | null;
+        nin: string | null;
+        documentUrl: string | null;
+        livenessResult: string | null;
+        verifiedAt: string | null;
       }[];
       supportTickets: { id: string; category: string; status: string; createdAt: string }[];
       auditLogs: AuditLogEntry[];
