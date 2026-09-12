@@ -100,6 +100,24 @@ export default function UserDetailPage() {
     }
   }
 
+  // Clears (never sets) the customer's transaction PIN — see backend
+  // AdminService.resetTransactionPin. Unlike setNewPassword above, there's
+  // no value to relay: the customer just gets prompted to set a fresh PIN
+  // from their own profile page before their next payment.
+  async function resetPin() {
+    if (!confirm("Reset this customer's transaction PIN? They'll need to set a new one before their next payment.")) return;
+    setBusy(true);
+    setMessage(null);
+    try {
+      await api.adminUserResetPin(id);
+      setMessage("Transaction PIN cleared — they'll be asked to set a new one before their next payment.");
+    } catch (err) {
+      setMessage(err instanceof ApiError ? err.message : 'Could not reset the PIN.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function setNewPassword() {
     const typed = prompt(
       'Type a new password for this account (min 8 characters), or leave blank to generate a random temporary one:',
@@ -182,6 +200,13 @@ export default function UserDetailPage() {
           className="rounded-lg border border-line px-4 py-2 text-sm font-medium text-foreground transition hover:bg-surface-hover disabled:opacity-50"
         >
           Set new password
+        </button>
+        <button
+          onClick={resetPin}
+          disabled={busy}
+          className="rounded-lg border border-line px-4 py-2 text-sm font-medium text-foreground transition hover:bg-surface-hover disabled:opacity-50"
+        >
+          Reset transaction PIN
         </button>
         <button
           onClick={deleteAccount}

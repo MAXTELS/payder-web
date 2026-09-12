@@ -4,20 +4,54 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { api, ApiError } from '@/lib/api-client';
 import { AmountInput } from '@/components/AmountInput';
+import {
+  PaymentResultModal,
+  paymentResultKindForStatus,
+  type PaymentResultKind,
+} from '@/components/PaymentResultModal';
+import { TransactionPinField } from '@/components/TransactionPinField';
 
 type ExamType = 'waec' | 'neco' | 'jamb';
+type ResultModalState = { kind: PaymentResultKind; message?: string } | null;
+
+function describePinStatus(status: string, pin?: string | null): string | undefined {
+  if (pin) return `Your pin is ${pin} — it's also been emailed to you and is always visible in Transaction history.`;
+  switch (status.toUpperCase()) {
+    case 'PROCESSING':
+    case 'PENDING':
+      return 'NECO pins are sourced by our team and typically arrive within a few hours — you\'ll get an email once it\'s ready.';
+    case 'FAILED':
+    case 'REVERSED':
+      return 'Purchase failed — you have been refunded to your wallet.';
+    default:
+      return undefined;
+  }
+}
 
 export default function ExamsPage() {
   const [examType, setExamType] = useState<ExamType>('waec');
-  const [phone, setPhone] = useState('');
+  // Pre-filled from the account's own email once /users/me loads, but left
+  // editable — this is the field that replaced the old "phone number" input
+  // (which was never actually used to deliver anything; see backend
+  // ExamsService's header comment).
+  const [email, setEmail] = useState('');
   // Only ever used for JAMB — WAEC/NECO are priced entirely by the backend
   // below and the customer never sees an editable amount field for them.
   const [jambAmount, setJambAmount] = useState('');
   const [pricing, setPricing] = useState<{ realPrice: string | null; markup: string; totalPrice: string | null } | null>(null);
   const [pricingError, setPricingError] = useState<string | null>(null);
+  const [pin, setPin] = useState('');
+  const [pinSet, setPinSet] = useState<boolean | undefined>(undefined);
   const [submitting, setSubmitting] = useState(false);
-  const [result, setResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [resultModal, setResultModal] = useState<ResultModalState>(null);
+
+  useEffect(() => {
+    api.me().then((me) => {
+      setEmail(me.email);
+      setPinSet(me.pinSet);
+    }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     setPricing(null);
@@ -31,24 +65,32 @@ export default function ExamsPage() {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    setResult(null);
     setError(null);
+    setResultModal(null);
     setSubmitting(true);
     try {
       const res = await api.examsBuyPin({
         examType,
-        phone,
+        email: email.trim() || undefined,
         amount: examType === 'jamb' ? jambAmount : undefined,
+        pin,
       });
-      setResult(res.pin ? `Your pin: ${res.pin}` : `Status: ${res.status}`);
+      setPin('');
+      setResultModal({
+        kind: paymentResultKindForStatus(res.status),
+        message: describePinStatus(res.status, res.pin),
+      });
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Something went wrong. Please try again.');
+      setResultModal({
+        kind: 'declined',
+        message: err instanceof ApiError ? err.message : 'Something went wrong. Please try again.',
+      });
     } finally {
       setSubmitting(false);
     }
   }
 
-  const canSubmit = phone.trim().length > 0 && (examType === 'jamb' ? jambAmount.trim().length > 0 : !!pricing?.totalPrice);
+  const canSubmit = examType === 'jamb' ? jambAmount.trim().length > 0 : !!pricing?.totalPrice;
 
   return (
     <div className="flex flex-col gap-6">
@@ -78,14 +120,21 @@ export default function ExamsPage() {
             <option value="jamb">JAMB e-PIN</option>
           </select>
         </label>
+
         <label className="flex flex-col gap-1 text-sm">
-          Phone number
+          Email for your pin
           <input
+            type="email"
             className="rounded border px-3 py-2"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="you@example.com"
+            required
           />
         </label>
+        <p className="-mt-2 text-xs text-muted">
+          Your pin will be emailed here and will also always be visible in Transaction history.
+        </p>
 
         {examType === 'jamb' ? (
           <label className="flex flex-col gap-1 text-sm">
@@ -120,16 +169,24 @@ export default function ExamsPage() {
           </div>
         )}
 
+        <TransactionPinField value={pin} onChange={setPin} pinSet={pinSet} />
+
         {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
-        {result && <p className="text-sm">{result}</p>}
         <button
           type="submit"
-          disabled={submitting || !canSubmit}
+          disabled={submitting || !canSubmit || pinSet === false}
           className="rounded bg-black px-4 py-2 text-sm text-white disabled:opacity-50"
         >
           {submitting ? 'Buying…' : 'Buy pin'}
         </button>
       </form>
+      {resultModal && (
+        <PaymentResultModal
+          kind={resultModal.kind}
+          message={resultModal.message}
+          onClose={() => setResultModal(null)}
+        />
+      )}
     </div>
   );
 }

@@ -286,6 +286,10 @@ export const api = {
       emailVerifiedAt: string | null;
       phoneVerifiedAt: string | null;
       createdAt: string;
+      // Whether a transaction PIN is already set — never the hash itself.
+      // Drives whether the profile page shows "set a PIN" or "change your
+      // PIN", and whether a purchase form should even bother asking for one.
+      pinSet: boolean;
     }>('/users/me'),
   walletBalance: () =>
     apiFetch<{
@@ -353,9 +357,19 @@ export const api = {
       `/bills/variations?serviceId=${encodeURIComponent(serviceId)}`,
     ),
   // TV only: confirms a smartcard number and returns the subscriber's name
-  // before the customer commits to paying.
+  // before the customer commits to paying. DSTV/GOtv also return status +
+  // dueDate (subscription-style — active until that date, then must
+  // renew); StarTimes returns balance instead (prepaid decoder — no
+  // status/dueDate exists for it). See backend VtpassProvider.verifyCustomer.
   billsVerify: (serviceId: string, customerId: string) =>
-    apiFetch<{ valid: boolean; customerName?: string }>(
+    apiFetch<{
+      valid: boolean;
+      customerName?: string;
+      status?: string;
+      dueDate?: string;
+      customerNumber?: string;
+      balance?: string;
+    }>(
       `/bills/verify?serviceId=${encodeURIComponent(serviceId)}&customerId=${encodeURIComponent(customerId)}`,
     ),
   billsPurchase: (dto: {
@@ -365,6 +379,10 @@ export const api = {
     customerId: string;
     amount: string;
     phone: string;
+    // Required by the backend (verifyTransactionPin) once a PIN is set —
+    // optional here purely so the pre-PIN "set a PIN first" error surfaces
+    // cleanly instead of a client-side type failure.
+    pin?: string;
   }) =>
     apiFetch<{ id: string; status: string; providerReference?: string }>('/bills/purchase', {
       method: 'POST',
@@ -383,7 +401,7 @@ export const api = {
     apiFetch<{ valid: boolean; customerName?: string }>(
       `/betting/verify?providerId=${encodeURIComponent(providerId)}&customerId=${encodeURIComponent(customerId)}`,
     ),
-  bettingFund: (dto: { providerId: string; customerId: string; amount: string }) =>
+  bettingFund: (dto: { providerId: string; customerId: string; amount: string; pin?: string }) =>
     apiFetch<{ id: string; status: string; providerReference?: string }>('/betting/fund', {
       method: 'POST',
       body: JSON.stringify(dto),
@@ -565,6 +583,7 @@ export const api = {
     accountNumber: string;
     confirmAccountNumber: string;
     accountName: string;
+    pin?: string;
   }) => apiFetch<WithdrawalRequest>('/withdrawals', { method: 'POST', body: JSON.stringify(payload) }),
   withdrawalsMine: () => apiFetch<WithdrawalRequest[]>('/withdrawals/mine'),
   adminWithdrawalsQueue: (status?: string) =>
@@ -643,7 +662,17 @@ export const api = {
       totalPrice: string | null;
       variationCode: string | null;
     }>(`/exams/pricing?examType=${examType}`),
-  examsBuyPin: (payload: { examType: 'waec' | 'neco' | 'jamb'; phone: string; amount?: string }) =>
+  // No phone field (removed 2026-09) — it was never actually how the pin got
+  // delivered (VTpass only needed *a* phone-shaped value as a request
+  // parameter, satisfied server-side from the buyer's own account); `email`
+  // (pre-filled with, but editable from, the account email — see the exams
+  // page) is where the pin is actually sent, see backend ExamsService.
+  examsBuyPin: (payload: {
+    examType: 'waec' | 'neco' | 'jamb';
+    email?: string;
+    amount?: string;
+    pin?: string;
+  }) =>
     apiFetch<{ transactionId?: string; pin?: string | null; status: string }>('/exams/pins', {
       method: 'POST',
       body: JSON.stringify(payload),
@@ -688,10 +717,13 @@ export const api = {
   // Admin: completes a manually-fulfilled NECO exam pin once staff have
   // bought the actual pin from NECO's own portal (see backend
   // AdminService.fulfillExamPin — NECO has no live aggregator yet).
-  adminExamFulfill: (transactionId: string, pin: string) =>
+  // `email` overrides who the confirmation goes to (defaults to whatever the
+  // customer typed on the exam-pins form, then their account email);
+  // `message` is a freeform note folded into that same confirmation email.
+  adminExamFulfill: (transactionId: string, pin: string, email?: string, message?: string) =>
     apiFetch(`/admin/exams/${transactionId}/fulfill`, {
       method: 'PATCH',
-      body: JSON.stringify({ pin }),
+      body: JSON.stringify({ pin, email, message }),
     }),
 
   // Admin: audit log — every admin/staff action, filterable by actor.
@@ -781,6 +813,11 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify({ password }),
     }),
+  // Clears (never sets) a customer's transaction PIN — see backend
+  // AdminService.resetTransactionPin for why. They'll be prompted to set a
+  // fresh one from their profile page before their next payment.
+  adminUserResetPin: (id: string) =>
+    apiFetch<{ id: string; pinCleared: true }>(`/admin/users/${id}/reset-pin`, { method: 'PATCH' }),
 
   // Self-service: any logged-in user (customer, admin, or customer care)
   // changing their own password.
@@ -788,6 +825,16 @@ export const api = {
     apiFetch<{ updated: true }>('/users/me/password', {
       method: 'PATCH',
       body: JSON.stringify({ currentPassword, newPassword }),
+    }),
+
+  // Sets (first time) or changes (currentPin required — omit only when
+  // me().pinSet is false) the transaction PIN required before every
+  // debit-type purchase. Same shape as billerSetPin below, generalized to
+  // any customer account.
+  setMyPin: (pin: string, currentPin?: string) =>
+    apiFetch<{ updated: true }>('/users/me/pin', {
+      method: 'POST',
+      body: JSON.stringify({ pin, currentPin }),
     }),
 
   // Admin: the biller feature (§ biller-feature-spec.md project doc). A

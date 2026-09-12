@@ -3,6 +3,27 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { api, ApiError } from '@/lib/api-client';
+import {
+  PaymentResultModal,
+  paymentResultKindForStatus,
+  type PaymentResultKind,
+} from '@/components/PaymentResultModal';
+import { TransactionPinField } from '@/components/TransactionPinField';
+
+type ResultModalState = { kind: PaymentResultKind; message?: string } | null;
+
+function describeSubscriptionStatus(status: string): string | undefined {
+  switch (status.toUpperCase()) {
+    case 'SUCCESS':
+      return 'Your subscription was successful.';
+    case 'REVERSED':
+      return 'Payment failed — you have been refunded to your wallet.';
+    case 'FAILED':
+      return 'Payment failed.';
+    default:
+      return undefined;
+  }
+}
 
 // VTpass TV serviceIDs — confirmed against vtpass.com/documentation/.
 // Electricity is deliberately not wired up yet (2026-09-12 scoping
@@ -23,14 +44,27 @@ export default function BillsPage() {
   const [smartcard, setSmartcard] = useState('');
   const [verifying, setVerifying] = useState(false);
   const [verifiedName, setVerifiedName] = useState<string | null>(null);
+  const [verifyDetails, setVerifyDetails] = useState<{
+    status?: string;
+    dueDate?: string;
+    customerNumber?: string;
+    balance?: string;
+  } | null>(null);
   const [verifyError, setVerifyError] = useState<string | null>(null);
   const [variations, setVariations] = useState<Variation[]>([]);
   const [loadingPlans, setLoadingPlans] = useState(false);
   const [variationCode, setVariationCode] = useState('');
   const [phone, setPhone] = useState('');
+  const [pin, setPin] = useState('');
+  const [pinSet, setPinSet] = useState<boolean | undefined>(undefined);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [purchase, setPurchase] = useState<PurchaseStatus>(null);
+  const [resultModal, setResultModal] = useState<ResultModalState>(null);
+
+  useEffect(() => {
+    api.me().then((me) => setPinSet(me.pinSet)).catch(() => {});
+  }, []);
 
   const provider = TV_PROVIDERS[providerIndex];
 
@@ -44,8 +78,19 @@ export default function BillsPage() {
       .finally(() => setLoadingPlans(false));
     // Switching provider invalidates any smartcard verification done so far.
     setVerifiedName(null);
+    setVerifyDetails(null);
     setVerifyError(null);
   }, [provider.serviceId]);
+
+  // GOtv/DSTV send Due_Date in different formats ("2025-02-06T00:00:00" vs
+  // "02-FEB-25") — VTpass isn't consistent across its own products. Rather
+  // than risk silently mis-parsing one of them, only replace the raw string
+  // with a friendlier one when Date can actually make sense of it.
+  function formatDueDate(raw: string): string {
+    const parsed = new Date(raw);
+    if (Number.isNaN(parsed.getTime())) return raw;
+    return parsed.toLocaleDateString('en-NG', { day: 'numeric', month: 'long', year: 'numeric' });
+  }
 
   const selectedPlan = variations.find((v) => v.code === variationCode);
 
@@ -53,7 +98,15 @@ export default function BillsPage() {
     if (!purchase || purchase.status !== 'PROCESSING') return;
     const interval = setInterval(async () => {
       try {
-        setPurchase(await api.billsStatus(purchase.id));
+        const updated = await api.billsStatus(purchase.id);
+        setPurchase(updated);
+        if (updated.status !== 'PROCESSING') {
+          setSubmitting(false);
+          setResultModal({
+            kind: paymentResultKindForStatus(updated.status),
+            message: describeSubscriptionStatus(updated.status),
+          });
+        }
       } catch {
         // transient — try again on the next tick
       }
@@ -64,6 +117,7 @@ export default function BillsPage() {
   async function verifySmartcard() {
     setVerifyError(null);
     setVerifiedName(null);
+    setVerifyDetails(null);
     if (!smartcard.trim()) {
       setVerifyError('Enter a smartcard number first.');
       return;
@@ -73,6 +127,12 @@ export default function BillsPage() {
       const res = await api.billsVerify(provider.serviceId, smartcard.trim());
       if (res.valid && res.customerName) {
         setVerifiedName(res.customerName);
+        setVerifyDetails({
+          status: res.status,
+          dueDate: res.dueDate,
+          customerNumber: res.customerNumber,
+          balance: res.balance,
+        });
       } else {
         setVerifyError('Could not verify that smartcard number — double-check it.');
       }
@@ -87,6 +147,7 @@ export default function BillsPage() {
     e.preventDefault();
     setError(null);
     setPurchase(null);
+    setResultModal(null);
 
     if (!verifiedName) {
       setError('Verify the smartcard number before paying.');
@@ -106,12 +167,25 @@ export default function BillsPage() {
         customerId: smartcard.trim(),
         amount: selectedPlan?.amount ?? '0',
         phone,
+        pin,
       });
       setPurchase(res);
+      setPin('');
+      if (res.status !== 'PROCESSING') {
+        setSubmitting(false);
+        setResultModal({
+          kind: paymentResultKindForStatus(res.status),
+          message: describeSubscriptionStatus(res.status),
+        });
+      }
+      // else: leave submitting true — the polling effect above clears it
+      // once a final status arrives, then shows exactly one modal.
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Something went wrong. Try again.');
-    } finally {
       setSubmitting(false);
+      setResultModal({
+        kind: 'declined',
+        message: err instanceof ApiError ? err.message : 'Something went wrong. Try again.',
+      });
     }
   }
 
@@ -176,9 +250,41 @@ export default function BillsPage() {
             </button>
           </div>
           {verifiedName && (
-            <p className="text-sm text-green-700 dark:text-green-400">
-              ✅ {verifiedName}
-            </p>
+            <div className="rounded-lg border border-line bg-surface-hover px-3 py-2 text-sm">
+              <p className="text-green-700 dark:text-green-400">✅ {verifiedName}</p>
+              {verifyDetails?.customerNumber && (
+                <p className="mt-1 text-muted">Account number: {verifyDetails.customerNumber}</p>
+              )}
+              {verifyDetails?.status && (
+                <p className="mt-1 text-muted">
+                  Subscription status:{' '}
+                  <span
+                    className={
+                      verifyDetails.status.toUpperCase() === 'ACTIVE'
+                        ? 'font-medium text-green-700 dark:text-green-400'
+                        : 'font-medium text-red-600'
+                    }
+                  >
+                    {verifyDetails.status}
+                  </span>
+                </p>
+              )}
+              {verifyDetails?.dueDate && (
+                <p className="mt-1 text-muted">
+                  Current bouquet active until{' '}
+                  <span className="font-medium text-foreground">
+                    {formatDueDate(verifyDetails.dueDate)}
+                  </span>
+                  {' — pick the same bouquet again below to renew it, or a different one to switch plans.'}
+                </p>
+              )}
+              {verifyDetails?.balance !== undefined && (
+                <p className="mt-1 text-muted">
+                  {provider.label} works on a prepaid decoder balance rather than a subscription due
+                  date. Current balance on file with {provider.label}: ₦{verifyDetails.balance}.
+                </p>
+              )}
+            </div>
           )}
           {verifyError && <p className="text-sm text-red-600">{verifyError}</p>}
         </div>
@@ -211,24 +317,24 @@ export default function BillsPage() {
           />
         </label>
 
+        <TransactionPinField value={pin} onChange={setPin} pinSet={pinSet} />
+
         {error && <p className="text-sm text-red-600">{error}</p>}
         <button
           type="submit"
-          disabled={submitting}
+          disabled={submitting || pinSet === false}
           className="rounded-lg bg-brand-orange px-4 py-2.5 font-semibold text-white shadow-sm transition hover:bg-brand-orange-dark disabled:opacity-50"
         >
           {submitting ? 'Processing…' : 'Pay'}
         </button>
-        {purchase && (
-          <p className="text-sm">
-            {purchase.status === 'SUCCESS' && '✅ Subscription successful.'}
-            {purchase.status === 'PROCESSING' && '⏳ Still processing — checking for an update…'}
-            {purchase.status === 'PENDING' && '⏳ Submitted — waiting on the provider…'}
-            {purchase.status === 'REVERSED' && '❌ Payment failed — you have been refunded to your wallet.'}
-            {purchase.status === 'FAILED' && '❌ Payment failed.'}
-          </p>
-        )}
       </form>
+      {resultModal && (
+        <PaymentResultModal
+          kind={resultModal.kind}
+          message={resultModal.message}
+          onClose={() => setResultModal(null)}
+        />
+      )}
     </div>
   );
 }

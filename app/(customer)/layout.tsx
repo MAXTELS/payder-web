@@ -13,6 +13,7 @@ const NAV: SidebarNavItem[] = [
   { href: '/betting', label: 'Betting' },
   { href: '/exams', label: 'Exam pins' },
   { href: '/kyc', label: 'Identity verification' },
+  { href: '/account/transaction-pin', label: 'Transaction PIN' },
   { href: '/support', label: 'Support' },
 ];
 

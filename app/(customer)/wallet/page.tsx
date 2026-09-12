@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { api, ApiError, NgnBank, WithdrawalRequest } from '@/lib/api-client';
 import { AmountInput } from '@/components/AmountInput';
 import { EyeToggle } from '@/components/EyeToggle';
+import { TransactionPinField } from '@/components/TransactionPinField';
 import { formatWithCommas } from '@/lib/format';
 
 type Balance = Awaited<ReturnType<typeof api.walletBalance>>;
@@ -77,6 +78,46 @@ function CopyableRow({ label, value }: { label: string; value: string }) {
   );
 }
 
+// Collapsed-by-default accordion section — mirrors mobile's
+// `_CollapsibleSection` in wallet_tab.dart. Used to group the bank-transfer,
+// Paystack, and withdrawal flows so the page reads as "pick one" rather than
+// three stacked forms competing for attention. The dedicated-account card is
+// deliberately NOT wrapped in one of these — see WalletPage below.
+function CollapsibleSection({
+  title,
+  subtitle,
+  defaultOpen = false,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  defaultOpen?: boolean;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="rounded-2xl border border-line bg-surface shadow-sm">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between gap-4 p-6 text-left"
+      >
+        <div>
+          <h2 className="text-base font-semibold text-foreground">{title}</h2>
+          {subtitle && <p className="mt-1 text-sm text-muted">{subtitle}</p>}
+        </div>
+        <span
+          className={`shrink-0 text-lg text-muted transition-transform ${open ? 'rotate-180' : ''}`}
+          aria-hidden
+        >
+          ▾
+        </span>
+      </button>
+      {open && <div className="border-t border-line p-6 pt-5">{children}</div>}
+    </div>
+  );
+}
+
 export default function WalletPage() {
   const [balance, setBalance] = useState<Balance | null>(null);
   const [requests, setRequests] = useState<FundingRequest[]>([]);
@@ -105,9 +146,15 @@ export default function WalletPage() {
   const [wAccountNumber, setWAccountNumber] = useState('');
   const [wConfirmAccountNumber, setWConfirmAccountNumber] = useState('');
   const [wAccountName, setWAccountName] = useState('');
+  const [wPin, setWPin] = useState('');
+  const [pinSet, setPinSet] = useState<boolean | undefined>(undefined);
   const [wSubmitting, setWSubmitting] = useState(false);
   const [wMessage, setWMessage] = useState<string | null>(null);
   const [wError, setWError] = useState<string | null>(null);
+
+  useEffect(() => {
+    api.me().then((me) => setPinSet(me.pinSet)).catch(() => {});
+  }, []);
 
   function refresh() {
     api.walletBalance().then(setBalance).catch(() => setBalance(null));
@@ -160,6 +207,7 @@ export default function WalletPage() {
         accountNumber: wAccountNumber,
         confirmAccountNumber: wConfirmAccountNumber,
         accountName: wAccountName,
+        pin: wPin,
       });
       setWMessage(
         'Withdrawal requested — the amount and fee have been deducted from your wallet and will stay Pending until an admin sends the transfer.',
@@ -170,6 +218,7 @@ export default function WalletPage() {
       setWAccountNumber('');
       setWConfirmAccountNumber('');
       setWAccountName('');
+      setWPin('');
       refresh();
     } catch (err) {
       setWError(err instanceof ApiError ? err.message : 'Submission failed. Try again.');
@@ -223,7 +272,7 @@ export default function WalletPage() {
   }
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-6">
       <h1 className="text-xl font-semibold text-foreground">Wallet</h1>
 
       <div className="rounded-2xl bg-gradient-to-br from-brand-navy to-brand-navy-light p-6 text-white shadow-lg">
@@ -244,43 +293,32 @@ export default function WalletPage() {
         </div>
       </div>
 
-      <div className="rounded-2xl border border-line bg-surface p-6 shadow-sm">
-        <div className="mb-4">
-          <h2 className="text-base font-semibold text-foreground">Fund instantly by card or bank</h2>
-          <p className="mt-1 text-sm text-muted">
-            Pay with Paystack and your wallet is credited as soon as checkout completes — no
-            waiting on admin approval.
-          </p>
+      {/* Dedicated virtual account — kept OUTSIDE any dropdown/section and
+          directly under the balance card, per the request to move it to the
+          top rather than have it compete inside the funding dropdowns. */}
+      <div className="rounded-2xl border border-dashed border-line bg-surface-hover p-6">
+        <div className="mb-2 flex items-center gap-2">
+          <h2 className="text-base font-semibold text-faint">Dedicated virtual account</h2>
+          <span className="rounded-full bg-neutral-200 px-2 py-0.5 text-xs font-medium text-muted">
+            Coming soon
+          </span>
         </div>
-        <form onSubmit={fundWithPaystack} className="flex flex-col gap-3 sm:max-w-sm">
-          <label className="flex flex-col gap-1 text-sm">
-            Amount
-            <AmountInput
-              className="rounded-lg border border-line px-3 py-2 outline-none transition focus:border-brand-orange"
-              value={paystackAmount}
-              onChange={setPaystackAmount}
-              placeholder="e.g. 5,000"
-            />
-          </label>
-          <button
-            type="submit"
-            disabled={!paystackAmount || paystackBusy}
-            className="rounded-lg bg-brand-navy px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-navy-light disabled:opacity-50"
-          >
-            {paystackBusy ? 'Starting checkout…' : 'Pay with Paystack'}
-          </button>
-          {paystackError && <p className="text-sm text-red-600">{paystackError}</p>}
-        </form>
+        <p className="text-sm text-faint">
+          Instant funding via your own permanent account number is on the way. For now, use one of
+          the funding options below.
+        </p>
+        <button
+          disabled
+          className="mt-3 cursor-not-allowed rounded-lg bg-neutral-200 px-4 py-2 text-sm text-faint"
+        >
+          Get my virtual account number
+        </button>
       </div>
 
-      <div className="rounded-2xl border border-line bg-surface p-6 shadow-sm">
-        <div className="mb-4">
-          <h2 className="text-base font-semibold text-foreground">Fund your wallet by bank transfer</h2>
-          <p className="mt-1 text-sm text-muted">
-            Transfer to any of the accounts below, then let us know so an admin can verify it.
-          </p>
-        </div>
-
+      <CollapsibleSection
+        title="Fund your wallet by bank transfer"
+        subtitle="Transfer to any of the accounts below, then let us know so an admin can verify it."
+      >
         <div className="mb-6 grid gap-3 sm:max-w-sm">
           {BANK_ACCOUNTS.map((acc) => (
             // A <div role="button">, not a real <button> — CopyableRow below
@@ -378,48 +416,76 @@ export default function WalletPage() {
         )}
 
         {message && <p className="mt-4 max-w-md text-sm text-foreground">{message}</p>}
-      </div>
 
-      {requests.length > 0 && (
-        <div>
-          <h2 className="mb-3 text-sm font-semibold text-muted">Your funding requests</h2>
-          <ul className="flex flex-col gap-2">
-            {requests.map((r) => (
-              <li
-                key={r.id}
-                className="flex items-center justify-between rounded-xl border border-line bg-surface p-4 text-sm shadow-sm"
-              >
-                <div>
-                  <p className="font-medium text-foreground">NGN {r.amount}</p>
-                  <p className="text-xs text-faint">
-                    {r.destinationAccount} · from {r.senderAccountName} ({r.senderBankName})
-                  </p>
-                  {r.status === 'REJECTED' && r.rejectionReason && (
-                    <p className="mt-1 text-xs text-red-600">Rejected: {r.rejectionReason}</p>
-                  )}
-                </div>
-                <span
-                  className={`rounded-full px-3 py-1 text-xs font-medium ${
-                    STATUS_STYLES[r.status] ?? 'bg-surface-hover text-neutral-700'
-                  }`}
+        {requests.length > 0 && (
+          <div className="mt-6">
+            <h3 className="mb-3 text-sm font-semibold text-muted">Your funding requests</h3>
+            <ul className="flex flex-col gap-2">
+              {requests.map((r) => (
+                <li
+                  key={r.id}
+                  className="flex items-center justify-between rounded-xl border border-line bg-surface p-4 text-sm shadow-sm"
                 >
-                  {r.status}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+                  <div>
+                    <p className="font-medium text-foreground">NGN {r.amount}</p>
+                    <p className="text-xs text-faint">
+                      {r.destinationAccount} · from {r.senderAccountName} ({r.senderBankName})
+                    </p>
+                    {r.status === 'REJECTED' && r.rejectionReason && (
+                      <p className="mt-1 text-xs text-red-600">Rejected: {r.rejectionReason}</p>
+                    )}
+                  </div>
+                  <span
+                    className={`rounded-full px-3 py-1 text-xs font-medium ${
+                      STATUS_STYLES[r.status] ?? 'bg-surface-hover text-neutral-700'
+                    }`}
+                  >
+                    {r.status}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </CollapsibleSection>
 
-      <div className="rounded-2xl border border-line bg-surface p-6 shadow-sm">
-        <div className="mb-4">
-          <h2 className="text-base font-semibold text-foreground">Withdraw to your bank account</h2>
-          <p className="mt-1 text-sm text-muted">
-            The amount plus a processing fee (NGN 100 below NGN 10,000, NGN 150 at or above it) is
-            deducted from your wallet right away. An admin then sends the transfer to your account —
-            requests stay Pending until they do.
-          </p>
-        </div>
+      <CollapsibleSection
+        title="Fund instantly by card or bank (Paystack)"
+        subtitle="Your wallet is credited as soon as checkout completes — no waiting on admin approval."
+      >
+        <form onSubmit={fundWithPaystack} className="flex flex-col gap-3 sm:max-w-sm">
+          <label className="flex flex-col gap-1 text-sm">
+            Amount
+            <AmountInput
+              className="rounded-lg border border-line px-3 py-2 outline-none transition focus:border-brand-orange"
+              value={paystackAmount}
+              onChange={setPaystackAmount}
+              placeholder="e.g. 5,000"
+            />
+          </label>
+          <button
+            type="submit"
+            disabled={!paystackAmount || paystackBusy}
+            className="rounded-lg bg-brand-navy px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-navy-light disabled:opacity-50"
+          >
+            {paystackBusy ? 'Starting checkout…' : 'Pay with Paystack'}
+          </button>
+          {paystackError && <p className="text-sm text-red-600">{paystackError}</p>}
+        </form>
+        <p className="mt-4 max-w-md text-xs text-muted">
+          If you choose to pay by bank transfer on the Paystack screen, the account number shown
+          there is a{' '}
+          <span className="font-semibold text-foreground">one-time account for this payment only</span>{' '}
+          — use it once, and transfer the{' '}
+          <span className="font-semibold text-foreground">exact amount shown</span> (including any
+          charges Paystack adds), or the payment may not be credited automatically.
+        </p>
+      </CollapsibleSection>
+
+      <CollapsibleSection
+        title="Withdraw to your bank account"
+        subtitle="The amount plus a processing fee (NGN 100 below NGN 10,000, NGN 150 at or above it) is deducted from your wallet right away. An admin then sends the transfer to your account — requests stay Pending until they do."
+      >
         <form onSubmit={submitWithdrawal} className="flex flex-col gap-3 sm:max-w-sm">
           <label className="flex flex-col gap-1 text-sm">
             Amount to withdraw
@@ -507,9 +573,11 @@ export default function WalletPage() {
             </p>
           )}
 
+          <TransactionPinField value={wPin} onChange={setWPin} pinSet={pinSet} />
+
           <button
             type="submit"
-            disabled={wSubmitting || !wAmount}
+            disabled={wSubmitting || !wAmount || pinSet === false}
             className="rounded-lg bg-brand-orange px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-orange-dark disabled:opacity-50"
           >
             {wSubmitting ? 'Submitting…' : 'Request withdrawal'}
@@ -517,59 +585,40 @@ export default function WalletPage() {
           {wError && <p className="text-sm text-red-600">{wError}</p>}
           {wMessage && <p className="text-sm text-foreground">{wMessage}</p>}
         </form>
-      </div>
 
-      {withdrawals.length > 0 && (
-        <div>
-          <h2 className="mb-3 text-sm font-semibold text-muted">Your withdrawal requests</h2>
-          <ul className="flex flex-col gap-2">
-            {withdrawals.map((w) => (
-              <li
-                key={w.id}
-                className="flex items-center justify-between rounded-xl border border-line bg-surface p-4 text-sm shadow-sm"
-              >
-                <div>
-                  <p className="font-medium text-foreground">
-                    NGN {w.amount} <span className="text-xs text-faint">(fee NGN {w.fee})</span>
-                  </p>
-                  <p className="text-xs text-faint">
-                    {w.bankName} · {w.accountNumber} · {w.accountName}
-                  </p>
-                  {w.status === 'REJECTED' && w.rejectionReason && (
-                    <p className="mt-1 text-xs text-red-600">Rejected: {w.rejectionReason}</p>
-                  )}
-                </div>
-                <span
-                  className={`rounded-full px-3 py-1 text-xs font-medium ${
-                    WITHDRAWAL_STATUS_STYLES[w.status] ?? 'bg-surface-hover text-neutral-700'
-                  }`}
+        {withdrawals.length > 0 && (
+          <div className="mt-6">
+            <h3 className="mb-3 text-sm font-semibold text-muted">Your withdrawal requests</h3>
+            <ul className="flex flex-col gap-2">
+              {withdrawals.map((w) => (
+                <li
+                  key={w.id}
+                  className="flex items-center justify-between rounded-xl border border-line bg-surface p-4 text-sm shadow-sm"
                 >
-                  {w.status}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      <div className="rounded-2xl border border-dashed border-line bg-surface-hover p-6">
-        <div className="mb-2 flex items-center gap-2">
-          <h2 className="text-base font-semibold text-faint">Dedicated virtual account</h2>
-          <span className="rounded-full bg-neutral-200 px-2 py-0.5 text-xs font-medium text-muted">
-            Coming soon
-          </span>
-        </div>
-        <p className="text-sm text-faint">
-          Instant funding via your own permanent account number is on the way. For now, use manual
-          bank transfer above.
-        </p>
-        <button
-          disabled
-          className="mt-3 cursor-not-allowed rounded-lg bg-neutral-200 px-4 py-2 text-sm text-faint"
-        >
-          Get my virtual account number
-        </button>
-      </div>
+                  <div>
+                    <p className="font-medium text-foreground">
+                      NGN {w.amount} <span className="text-xs text-faint">(fee NGN {w.fee})</span>
+                    </p>
+                    <p className="text-xs text-faint">
+                      {w.bankName} · {w.accountNumber} · {w.accountName}
+                    </p>
+                    {w.status === 'REJECTED' && w.rejectionReason && (
+                      <p className="mt-1 text-xs text-red-600">Rejected: {w.rejectionReason}</p>
+                    )}
+                  </div>
+                  <span
+                    className={`rounded-full px-3 py-1 text-xs font-medium ${
+                      WITHDRAWAL_STATUS_STYLES[w.status] ?? 'bg-surface-hover text-neutral-700'
+                    }`}
+                  >
+                    {w.status}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </CollapsibleSection>
     </div>
   );
 }

@@ -3,6 +3,27 @@
 import { useEffect, useState } from 'react';
 import { api, ApiError } from '@/lib/api-client';
 import { AmountInput } from '@/components/AmountInput';
+import {
+  PaymentResultModal,
+  paymentResultKindForStatus,
+  type PaymentResultKind,
+} from '@/components/PaymentResultModal';
+import { TransactionPinField } from '@/components/TransactionPinField';
+
+type ResultModalState = { kind: PaymentResultKind; message?: string } | null;
+
+function describePurchaseStatus(status: string): string | undefined {
+  switch (status.toUpperCase()) {
+    case 'SUCCESS':
+      return 'Your purchase was successful.';
+    case 'REVERSED':
+      return 'Purchase failed — you have been refunded to your wallet.';
+    case 'FAILED':
+      return 'Purchase failed.';
+    default:
+      return undefined;
+  }
+}
 
 // VTpass serviceIDs — confirmed against vtpass.com/documentation/service-ids/.
 // Airtime and data are DIFFERENT services per network (e.g. "mtn" vs
@@ -26,9 +47,16 @@ export default function AirtimePage() {
   const [variations, setVariations] = useState<Variation[]>([]);
   const [variationCode, setVariationCode] = useState('');
   const [loadingPlans, setLoadingPlans] = useState(false);
+  const [pin, setPin] = useState('');
+  const [pinSet, setPinSet] = useState<boolean | undefined>(undefined);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [purchase, setPurchase] = useState<PurchaseStatus>(null);
+  const [resultModal, setResultModal] = useState<ResultModalState>(null);
+
+  useEffect(() => {
+    api.me().then((me) => setPinSet(me.pinSet)).catch(() => {});
+  }, []);
 
   const network = NETWORKS[networkIndex];
   const serviceId = category === 'airtime' ? network.airtime : network.data;
@@ -68,6 +96,13 @@ export default function AirtimePage() {
       try {
         const updated = await api.billsStatus(purchase.id);
         setPurchase(updated);
+        if (updated.status !== 'PROCESSING') {
+          setSubmitting(false);
+          setResultModal({
+            kind: paymentResultKindForStatus(updated.status),
+            message: describePurchaseStatus(updated.status),
+          });
+        }
       } catch {
         // transient — try again on the next tick
       }
@@ -79,6 +114,7 @@ export default function AirtimePage() {
     e.preventDefault();
     setError(null);
     setPurchase(null);
+    setResultModal(null);
 
     if (category === 'data' && !variationCode) {
       setError('Pick a data plan.');
@@ -94,12 +130,25 @@ export default function AirtimePage() {
         customerId: phone,
         amount: category === 'data' ? (selectedPlan?.amount ?? '0') : amount,
         phone,
+        pin,
       });
       setPurchase(res);
+      setPin('');
+      if (res.status !== 'PROCESSING') {
+        setSubmitting(false);
+        setResultModal({
+          kind: paymentResultKindForStatus(res.status),
+          message: describePurchaseStatus(res.status),
+        });
+      }
+      // else: leave submitting true — the polling effect above clears it
+      // once a final status arrives, then shows exactly one modal.
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Something went wrong. Try again.');
-    } finally {
       setSubmitting(false);
+      setResultModal({
+        kind: 'declined',
+        message: err instanceof ApiError ? err.message : 'Something went wrong. Try again.',
+      });
     }
   }
 
@@ -178,24 +227,24 @@ export default function AirtimePage() {
             </p>
           )
         )}
+        <TransactionPinField value={pin} onChange={setPin} pinSet={pinSet} />
+
         {error && <p className="text-sm text-red-600">{error}</p>}
         <button
           type="submit"
-          disabled={submitting}
+          disabled={submitting || pinSet === false}
           className="rounded-lg bg-brand-orange px-4 py-2.5 font-semibold text-white shadow-sm transition hover:bg-brand-orange-dark disabled:opacity-50"
         >
           {submitting ? 'Processing…' : 'Buy'}
         </button>
-        {purchase && (
-          <p className="text-sm">
-            {purchase.status === 'SUCCESS' && '✅ Purchase successful.'}
-            {purchase.status === 'PROCESSING' && '⏳ Still processing — checking for an update…'}
-            {purchase.status === 'PENDING' && '⏳ Submitted — waiting on the provider…'}
-            {purchase.status === 'REVERSED' && '❌ Purchase failed — you have been refunded to your wallet.'}
-            {purchase.status === 'FAILED' && '❌ Purchase failed.'}
-          </p>
-        )}
       </form>
+      {resultModal && (
+        <PaymentResultModal
+          kind={resultModal.kind}
+          message={resultModal.message}
+          onClose={() => setResultModal(null)}
+        />
+      )}
     </div>
   );
 }
