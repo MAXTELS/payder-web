@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { getCurrentUser, Role, SessionUser } from '@/lib/auth';
+import { useIdleLogout } from '@/lib/useIdleLogout';
 import { PageLoader } from './PageLoader';
 
 /**
@@ -42,6 +43,10 @@ export function RoleGuard({
   useEffect(() => {
     if (mounted && !authorized) router.replace('/login');
   }, [mounted, authorized, router]);
+
+  // 10-minute inactivity timeout — every role-gated page routes through
+  // here, so this one call covers customer, admin, biller, and care alike.
+  useIdleLogout(authorized);
 
   // Previously returned null here — every role-gated page (admin, customer,
   // biller, care) looked completely blank/stuck for the brief mount-check

@@ -78,6 +78,30 @@ function CopyableRow({ label, value }: { label: string; value: string }) {
   );
 }
 
+// Same click-to-copy behavior as CopyableRow below, but styled for the dark
+// gradient balance card rather than a light bordered row.
+function CopyWalletIdButton({ walletId }: { walletId: string }) {
+  const [copied, setCopied] = useState(false);
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(walletId);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // clipboard unavailable — the ID is still visible to copy by hand
+    }
+  }
+  return (
+    <button
+      type="button"
+      onClick={copy}
+      className="shrink-0 rounded-full border border-white/30 px-3 py-1 text-xs font-medium text-white transition hover:bg-white/10"
+    >
+      {copied ? 'Copied' : 'Copy'}
+    </button>
+  );
+}
+
 // Collapsed-by-default accordion section — mirrors mobile's
 // `_CollapsibleSection` in wallet_tab.dart. Used to group the bank-transfer,
 // Paystack, and withdrawal flows so the page reads as "pick one" rather than
@@ -291,6 +315,17 @@ export default function WalletPage() {
             className="flex h-8 w-8 items-center justify-center rounded-full text-neutral-300 transition hover:bg-white/10 hover:text-white"
           />
         </div>
+        {balance?.walletId && (
+          <div className="mt-4 flex items-center justify-between gap-3 rounded-xl bg-white/10 px-4 py-2.5">
+            <div>
+              <p className="text-xs text-neutral-300">Your PAYDER wallet ID</p>
+              <p className="font-mono text-sm font-semibold tracking-wide text-white">
+                {balance.walletId}
+              </p>
+            </div>
+            <CopyWalletIdButton walletId={balance.walletId} />
+          </div>
+        )}
       </div>
 
       {/* Dedicated virtual account — kept OUTSIDE any dropdown/section and

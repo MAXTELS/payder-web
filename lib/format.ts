@@ -27,6 +27,7 @@ export const TRANSACTION_TYPE_LABELS: Record<string, string> = {
   FEE: 'Fee',
   BILLER_BILL_PAYMENT: 'Bill payment',
   BETTING: 'Betting funding',
+  WALLET_TRANSFER: 'Wallet transfer',
 };
 
 export const TRANSACTION_STATUS_STYLES: Record<string, string> = {
@@ -63,6 +64,17 @@ export function describeTransaction(
         : null;
     case 'WALLET_FUNDING':
       return m.provider ? `Via ${m.provider}` : null;
+    case 'WALLET_TRANSFER':
+      // Two Transaction rows exist per transfer (see backend
+      // WalletService.transferToWallet) — metadata.direction says which
+      // side of the pair this row is.
+      if (m.direction === 'sent') {
+        return m.recipientName ? `To ${m.recipientName} (${m.toWalletId ?? ''})` : null;
+      }
+      if (m.direction === 'received') {
+        return m.senderName ? `From ${m.senderName} (${m.fromWalletId ?? ''})` : null;
+      }
+      return null;
     default:
       return null;
   }

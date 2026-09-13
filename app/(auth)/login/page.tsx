@@ -11,6 +11,7 @@ function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const justReset = searchParams.get('reset') === '1';
+  const timedOut = searchParams.get('reason') === 'timeout';
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -49,6 +50,11 @@ function LoginForm() {
           {justReset && (
             <p className="mt-4 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700 dark:bg-green-900/30 dark:text-green-400">
               Your password has been reset — sign in with your new password.
+            </p>
+          )}
+          {timedOut && (
+            <p className="mt-4 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+              You were signed out after a period of inactivity. Please sign in again.
             </p>
           )}
           <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-4">

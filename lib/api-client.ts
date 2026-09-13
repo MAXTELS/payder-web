@@ -298,7 +298,27 @@ export const api = {
       virtualAccountNumber: string | null;
       virtualAccountBank: string | null;
       virtualAccountProvider: string | null;
+      // Every user's permanent 10-digit PAYDER wallet ID — distinct from
+      // virtualAccountNumber (a real bank NUBAN). Lazily generated
+      // server-side the first time /wallet/balance is called if one doesn't
+      // exist yet, so it's always present here. Used to send/receive
+      // wallet-to-wallet transfers — see walletTransferLookup/walletTransfer.
+      walletId: string;
     }>('/wallet/balance'),
+  // Looks up who a wallet ID belongs to before sending — shows the sender a
+  // masked name ("Jude O.") to confirm before they commit to the transfer.
+  walletTransferLookup: (walletId: string) =>
+    apiFetch<{ walletId: string; name: string }>(
+      `/wallet/transfer/lookup?walletId=${encodeURIComponent(walletId)}`,
+    ),
+  // 0.5% fee is computed server-side (WalletService.walletTransferFee) —
+  // this just submits the request; the response amount includes the total
+  // debited (transfer amount + fee).
+  walletTransfer: (payload: { toWalletId: string; amount: number; pin: string }) =>
+    apiFetch<{ id: string; status: string; amount: string; fee: string }>('/wallet/transfer', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
   walletStatement: (params?: {
     limit?: number;
     cursor?: string;
@@ -331,9 +351,10 @@ export const api = {
     }>(`/wallet/statement${suffix}`);
   },
   // Downloads the same filtered set as walletStatement, but every matching
-  // row in one CSV file rather than one cursor-page of JSON — see backend
-  // WalletController.exportStatement. Returns a Blob; the caller (the
-  // Transaction History page) turns it into a client-side download.
+  // row in one PDF statement rather than one cursor-page of JSON — see
+  // backend WalletController.exportStatement (pdfkit-generated). Returns a
+  // Blob; the caller (the Transaction History page) turns it into a
+  // client-side download.
   walletStatementExport: (params?: { type?: string; status?: string; from?: string; to?: string }) => {
     const qs = new URLSearchParams();
     if (params?.type) qs.set('type', params.type);
@@ -687,15 +708,35 @@ export const api = {
       body: JSON.stringify(payload),
     }),
 
-  // Admin: NECO's admin-set sell price — the ONLY source of what a customer
-  // is charged for a NECO pin (no PAYDER markup added on top of this, unlike
-  // WAEC). costPrice is optional/informational (what staff pay NECO itself).
-  adminGetNecoPrice: () =>
-    apiFetch<{ sellPrice: string; costPrice: string }>('/exams/admin/neco-price'),
-  adminSetNecoPrice: (sellPrice: number, costPrice?: number) =>
-    apiFetch<{ sellPrice: string; costPrice: string }>('/exams/admin/neco-price', {
+  // Admin: WAEC/NECO admin-set sell price — the ONLY source of what a
+  // customer is charged for an exam pin (both exam types are now fully
+  // manual — see exams.service.ts). costPrice is optional/informational
+  // (what staff pay the exam board itself). examType defaults to 'neco' to
+  // match the backend route's default, but the admin UI always passes it
+  // explicitly so it can manage WAEC and NECO as two separate price cards.
+  adminGetNecoPrice: (examType?: 'waec' | 'neco') =>
+    apiFetch<{ sellPrice: string; costPrice: string }>(
+      `/exams/admin/neco-price${examType ? `?examType=${examType}` : ''}`,
+    ),
+  adminSetNecoPrice: (sellPrice: number, costPrice?: number, examType?: 'waec' | 'neco') =>
+    apiFetch<{ sellPrice: string; costPrice: string }>(
+      `/exams/admin/neco-price${examType ? `?examType=${examType}` : ''}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ sellPrice, ...(costPrice !== undefined ? { costPrice } : {}) }),
+      },
+    ),
+
+  // Admin: which categories of admin-facing events trigger a notification
+  // email, and which address(es) receive them. See backend
+  // AdminNotificationService — categories is a subset of
+  // PENDING_TRANSACTIONS / WITHDRAWALS / SUPPORT / ALL.
+  adminGetNotificationSettings: () =>
+    apiFetch<{ categories: string[]; emails: string[] }>('/admin/notification-settings'),
+  adminSetNotificationSettings: (categories: string[], emails: string[]) =>
+    apiFetch<{ categories: string[]; emails: string[] }>('/admin/notification-settings', {
       method: 'PATCH',
-      body: JSON.stringify({ sellPrice, ...(costPrice !== undefined ? { costPrice } : {}) }),
+      body: JSON.stringify({ categories, emails }),
     }),
 
   // Admin: staff management (ADMIN / CUSTOMER_CARE accounts).

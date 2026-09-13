@@ -15,12 +15,13 @@ interface Transaction {
 
 const STATUSES = ['', 'PENDING', 'PROCESSING', 'SUCCESS', 'FAILED', 'REVERSED'];
 
-// NECO has no live pin aggregator, so unlike WAEC (priced straight off
-// VTpass + PAYDER's fixed ₦1,000 margin) its price is whatever the admin
-// sets here — charged to the customer with NO markup added on top, since
-// the admin's own figure is already inclusive of whatever margin they want.
-// See backend ExamsService.getPricing/getOrCreateNecoProduct.
-function NecoPriceCard() {
+// Both WAEC and NECO are now fully manual (no live pin aggregator for
+// either) — the admin sets whatever price the customer should be charged
+// here, margin already included, and no extra PAYDER fee is added on top.
+// One card per exam type so staff can price them independently.
+// See backend ExamsService.getPricing/getOrCreateExamProduct.
+function ExamPriceCard({ examType }: { examType: 'waec' | 'neco' }) {
+  const label = examType === 'waec' ? 'WAEC' : 'NECO';
   const [sellPrice, setSellPrice] = useState('');
   const [costPrice, setCostPrice] = useState('');
   const [loading, setLoading] = useState(true);
@@ -29,14 +30,14 @@ function NecoPriceCard() {
 
   useEffect(() => {
     api
-      .adminGetNecoPrice()
+      .adminGetNecoPrice(examType)
       .then((r) => {
         setSellPrice(r.sellPrice);
         setCostPrice(r.costPrice);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, []);
+  }, [examType]);
 
   async function save() {
     const sell = Number(sellPrice);
@@ -47,12 +48,12 @@ function NecoPriceCard() {
     const cost = costPrice ? Number(costPrice) : undefined;
     setSaving(true);
     try {
-      const r = await api.adminSetNecoPrice(sell, cost);
+      const r = await api.adminSetNecoPrice(sell, cost, examType);
       setSellPrice(r.sellPrice);
       setCostPrice(r.costPrice);
       setSavedAt(new Date());
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Could not save the NECO price.');
+      alert(err instanceof Error ? err.message : `Could not save the ${label} price.`);
     } finally {
       setSaving(false);
     }
@@ -60,9 +61,9 @@ function NecoPriceCard() {
 
   return (
     <div className="rounded border p-4">
-      <h2 className="text-sm font-semibold">NECO pin price</h2>
+      <h2 className="text-sm font-semibold">{label} pin price</h2>
       <p className="mt-1 max-w-2xl text-xs text-muted">
-        What a customer pays for a NECO result-checker pin right now — set this to whatever you
+        What a customer pays for a {label} result-checker pin right now — set this to whatever you
         want the customer charged, margin already included. No extra PAYDER fee is added on top.
       </p>
       {loading ? (
@@ -80,7 +81,7 @@ function NecoPriceCard() {
             />
           </label>
           <label className="text-xs text-muted">
-            Cost price (₦, optional — what NECO charges us)
+            Cost price (₦, optional — what {label} charges us)
             <input
               className="mt-1 block w-48 rounded border px-2 py-1 text-sm"
               type="number"
@@ -105,16 +106,17 @@ function NecoPriceCard() {
   );
 }
 
-// NECO has no live pin aggregator (see backend ExamsService's header
-// comment) — a NECO purchase is left PROCESSING with metadata.fulfillment
-// === 'manual' until staff buy the actual pin from NECO's own portal and
-// enter it here. Replaces the old bare `prompt()` flow with a proper form:
-// the pin, an email (pre-filled with whatever the customer typed on the
-// exam-pins form, editable in case staff need to redirect it), and a
-// freeform note that's folded into the same confirmation email as a
-// highlighted callout — for a "sorry for the wait, here's what happened"
-// kind of message rather than just the bare pin.
-function NecoFulfillForm({ transaction, onDone }: { transaction: Transaction; onDone: () => void }) {
+// Neither WAEC nor NECO has a live pin aggregator (see backend
+// ExamsService's header comment) — a purchase of either is left PROCESSING
+// with metadata.fulfillment === 'manual' until staff buy the actual pin
+// from that exam board's own portal and enter it here. The pin, an email
+// (pre-filled with whatever the customer typed on the exam-pins form,
+// editable in case staff need to redirect it), and a freeform note that's
+// folded into the same confirmation email as a highlighted callout — for a
+// "sorry for the wait, here's what happened" kind of message rather than
+// just the bare pin.
+function ExamFulfillForm({ transaction, onDone }: { transaction: Transaction; onDone: () => void }) {
+  const examLabel = transaction.metadata?.examType === 'waec' ? 'WAEC' : 'NECO';
   const [pin, setPin] = useState('');
   const [email, setEmail] = useState(transaction.metadata?.deliveryEmail ?? '');
   const [message, setMessage] = useState('');
@@ -124,7 +126,7 @@ function NecoFulfillForm({ transaction, onDone }: { transaction: Transaction; on
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!pin.trim()) {
-      setError('Enter the pin NECO gave you.');
+      setError(`Enter the pin ${examLabel} gave you.`);
       return;
     }
     setBusy(true);
@@ -144,12 +146,12 @@ function NecoFulfillForm({ transaction, onDone }: { transaction: Transaction; on
       <td colSpan={5} className="p-4">
         <form onSubmit={submit} className="flex max-w-md flex-col gap-2">
           <label className="text-xs text-muted">
-            NECO pin
+            {examLabel} pin
             <input
               className="mt-1 block w-full rounded border px-2 py-1.5 text-sm"
               value={pin}
               onChange={(e) => setPin(e.target.value)}
-              placeholder="The pin you bought from NECO's portal"
+              placeholder={`The pin you bought from ${examLabel}'s portal`}
               autoFocus
             />
           </label>
@@ -215,7 +217,10 @@ export default function TransactionsPage() {
   return (
     <div className="flex flex-col gap-6">
       <h1 className="text-xl font-semibold">Transactions</h1>
-      <NecoPriceCard />
+      <div className="grid gap-4 sm:grid-cols-2">
+        <ExamPriceCard examType="waec" />
+        <ExamPriceCard examType="neco" />
+      </div>
       <select
         className="w-48 rounded border px-3 py-2 text-sm"
         value={status}
@@ -258,13 +263,15 @@ export default function TransactionsPage() {
                         onClick={() => setFulfillingId(fulfillingId === t.id ? null : t.id)}
                         className="rounded bg-black px-3 py-1 text-xs text-white"
                       >
-                        {fulfillingId === t.id ? 'Close' : 'Deliver NECO pin'}
+                        {fulfillingId === t.id
+                          ? 'Close'
+                          : `Deliver ${t.metadata?.examType === 'waec' ? 'WAEC' : 'NECO'} pin`}
                       </button>
                     )}
                   </td>
                 </tr>
                 {fulfillingId === t.id && (
-                  <NecoFulfillForm
+                  <ExamFulfillForm
                     key={`${t.id}-form`}
                     transaction={t}
                     onDone={() => {

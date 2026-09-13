@@ -15,6 +15,7 @@ const NAV: SidebarNavItem[] = [
   { href: '/admin/providers', label: 'Providers' },
   { href: '/admin/staff', label: 'Staff' },
   { href: '/admin/audit-log', label: 'Audit log' },
+  { href: '/admin/notifications', label: 'Notification settings' },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

@@ -6,6 +6,7 @@ import { Sidebar, SidebarNavItem } from '@/components/Sidebar';
 const NAV: SidebarNavItem[] = [
   { href: '/dashboard', label: 'Dashboard' },
   { href: '/wallet', label: 'Wallet' },
+  { href: '/wallet-transfer', label: 'Wallet transfer' },
   { href: '/transactions', label: 'Transaction history' },
   { href: '/bills', label: 'Bills' },
   { href: '/bills/manual-payment', label: 'Remita / eTranzact' },

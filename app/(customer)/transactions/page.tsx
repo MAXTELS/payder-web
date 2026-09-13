@@ -27,7 +27,7 @@ const STATUS_OPTIONS = ['PENDING', 'PROCESSING', 'SUCCESS', 'FAILED', 'REVERSED'
 /**
  * Full transaction history — every Transaction row for this customer
  * (wallet funding, airtime/data, TV, electricity, betting, bill payments,
- * withdrawals, reversals, everything), with filters and a CSV export. The
+ * withdrawals, reversals, everything), with filters and a PDF export. The
  * dashboard's "Recent transactions" widget only ever shows the latest 8 with
  * no way to search further back or take the data anywhere else; this page
  * is that missing "see everything, and get it out of PAYDER" view.
@@ -90,7 +90,7 @@ export default function TransactionHistoryPage() {
     setTimeout(() => load(true), 0);
   }
 
-  async function exportCsv() {
+  async function exportPdf() {
     setExporting(true);
     setError(null);
     try {
@@ -98,7 +98,7 @@ export default function TransactionHistoryPage() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `payder-transactions-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.download = `payder-transactions-${new Date().toISOString().slice(0, 10)}.pdf`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -116,11 +116,11 @@ export default function TransactionHistoryPage() {
         <h1 className="text-xl font-semibold text-foreground">Transaction history</h1>
         <button
           type="button"
-          onClick={exportCsv}
+          onClick={exportPdf}
           disabled={exporting}
           className="rounded-lg border border-line bg-surface px-4 py-2 text-sm font-semibold text-foreground shadow-sm transition hover:border-brand-orange disabled:opacity-50"
         >
-          {exporting ? 'Exporting…' : 'Export CSV'}
+          {exporting ? 'Exporting…' : 'Export PDF'}
         </button>
       </div>
 
