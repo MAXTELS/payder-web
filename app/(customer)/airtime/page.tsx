@@ -70,7 +70,7 @@ export default function AirtimePage() {
     setLoadingPlans(true);
     setVariationCode('');
     api
-      .billsVariations(serviceId)
+      .billsVariations(serviceId, 'data')
       .then((list) => {
         if (!cancelled) setVariations(list);
       })

@@ -348,20 +348,29 @@ export const api = {
       method: 'POST',
     }),
 
-  // VTU (airtime/data/TV) via VTpass — see backend BillsService/VtpassProvider.
-  // Data bundle plans / TV bouquets, fetched live so sandbox vs live pricing
-  // is always whatever VTpass actually has right now (no PAYDER-side list to
-  // keep in sync).
-  billsVariations: (serviceId: string) =>
+  // VTU (airtime/data/TV/electricity) via Pairgate — see backend
+  // BillsService/PairgateVtuProvider. Data bundle plans / TV bouquets,
+  // fetched live so sandbox vs live pricing is always whatever Pairgate
+  // actually has right now (no PAYDER-side list to keep in sync).
+  //
+  // 2026-09-13: `category` is now REQUIRED on both calls below — the
+  // backend swapped from VTpass (whose serviceId scheme self-disambiguated
+  // category, e.g. "mtn" vs "mtn-data") to Pairgate (which needs an
+  // explicit category alongside a provider slug). Forgetting to pass it
+  // here silently gets back an empty variations list rather than an error —
+  // a mistake caught 2026-09-13 while auditing the mobile app's equivalent
+  // bug (see mobile bills_repository.dart's header comment).
+  billsVariations: (serviceId: string, category: 'airtime' | 'data' | 'tv' | 'electricity') =>
     apiFetch<{ code: string; name: string; amount: string }[]>(
-      `/bills/variations?serviceId=${encodeURIComponent(serviceId)}`,
+      `/bills/variations?serviceId=${encodeURIComponent(serviceId)}&category=${encodeURIComponent(category)}`,
     ),
-  // TV only: confirms a smartcard number and returns the subscriber's name
-  // before the customer commits to paying. DSTV/GOtv also return status +
-  // dueDate (subscription-style — active until that date, then must
-  // renew); StarTimes returns balance instead (prepaid decoder — no
-  // status/dueDate exists for it). See backend VtpassProvider.verifyCustomer.
-  billsVerify: (serviceId: string, customerId: string) =>
+  // TV/electricity only: confirms a smartcard/meter number and returns the
+  // subscriber's name before the customer commits to paying. DSTV/GOtv also
+  // return status + dueDate (subscription-style — active until that date,
+  // then must renew); StarTimes returns balance instead (prepaid decoder —
+  // no status/dueDate exists for it). See backend
+  // PairgateVtuProvider.verifyCustomer.
+  billsVerify: (serviceId: string, customerId: string, category: 'tv' | 'electricity') =>
     apiFetch<{
       valid: boolean;
       customerName?: string;
@@ -370,7 +379,7 @@ export const api = {
       customerNumber?: string;
       balance?: string;
     }>(
-      `/bills/verify?serviceId=${encodeURIComponent(serviceId)}&customerId=${encodeURIComponent(customerId)}`,
+      `/bills/verify?serviceId=${encodeURIComponent(serviceId)}&customerId=${encodeURIComponent(customerId)}&category=${encodeURIComponent(category)}`,
     ),
   billsPurchase: (dto: {
     category: 'airtime' | 'data' | 'tv';

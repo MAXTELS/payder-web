@@ -72,7 +72,7 @@ export default function BillsPage() {
     setLoadingPlans(true);
     setVariationCode('');
     api
-      .billsVariations(provider.serviceId)
+      .billsVariations(provider.serviceId, 'tv')
       .then(setVariations)
       .catch(() => setVariations([]))
       .finally(() => setLoadingPlans(false));
@@ -124,7 +124,7 @@ export default function BillsPage() {
     }
     setVerifying(true);
     try {
-      const res = await api.billsVerify(provider.serviceId, smartcard.trim());
+      const res = await api.billsVerify(provider.serviceId, smartcard.trim(), 'tv');
       if (res.valid && res.customerName) {
         setVerifiedName(res.customerName);
         setVerifyDetails({
