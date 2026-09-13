@@ -12,6 +12,7 @@ const NAV: SidebarNavItem[] = [
   { href: '/airtime', label: 'Airtime & Data' },
   { href: '/betting', label: 'Betting' },
   { href: '/exams', label: 'Exam pins' },
+  { href: '/gift-cards', label: 'Gift cards', disabled: true },
   { href: '/kyc', label: 'Identity verification' },
   { href: '/account/transaction-pin', label: 'Transaction PIN' },
   { href: '/support', label: 'Support' },

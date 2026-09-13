@@ -11,6 +11,11 @@ export interface SidebarNavItem {
   href: string;
   label: string;
   icon?: React.ReactNode;
+  /** Renders this item as a plain, unclickable row with a "Coming soon"
+   *  pill instead of a Link — for a feature that's visible on the menu
+   *  (so people know it's planned) but not built yet. Never navigates,
+   *  never highlights as active, has no href behavior at all. */
+  disabled?: boolean;
 }
 
 const ROLE_LABEL: Record<string, string> = {
@@ -130,6 +135,27 @@ export function Sidebar({
   const navLinks = (
     <nav className="flex flex-1 flex-col gap-1">
       {nav.map((item) => {
+        if (item.disabled) {
+          return (
+            <div
+              key={item.href}
+              aria-disabled="true"
+              title="Coming soon"
+              className={`flex cursor-not-allowed items-center justify-between rounded-lg px-3 py-2.5 text-sm font-medium opacity-50 ${
+                isDark ? 'text-neutral-400' : 'text-faint'
+              }`}
+            >
+              <span>{item.label}</span>
+              <span
+                className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                  isDark ? 'bg-white/10 text-neutral-300' : 'bg-surface-hover text-muted'
+                }`}
+              >
+                Coming soon
+              </span>
+            </div>
+          );
+        }
         const active = pathname === item.href;
         const badge =
           item.href === fundingHref && (pendingFunding?.count ?? 0) > 0
