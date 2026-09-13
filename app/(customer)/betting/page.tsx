@@ -48,6 +48,49 @@ export default function BettingPage() {
   const [result, setResult] = useState<FundStatus>(null);
   const [resultModal, setResultModal] = useState<ResultModalState>(null);
 
+  // Account-id verification — added 2026-09-13 so this page confirms the
+  // betting account id the same way the bills-pay page already confirms a
+  // smartcard/meter number before letting the customer pay, matching how
+  // Pairgate's own portal behaves on funding. api.bettingVerify already
+  // existed in lib/api-client.ts but was never actually called from here.
+  const [verifying, setVerifying] = useState(false);
+  const [verifiedName, setVerifiedName] = useState<string | null>(null);
+  const [verifyError, setVerifyError] = useState<string | null>(null);
+
+  // Any edit to the provider or the account id invalidates a previous
+  // verification — a "confirmed" name must never carry over to a DIFFERENT
+  // id the customer edited it into afterward.
+  useEffect(() => {
+    setVerifiedName(null);
+    setVerifyError(null);
+  }, [providerId, customerId]);
+
+  async function verifyAccount() {
+    setVerifyError(null);
+    setVerifiedName(null);
+    if (!providerId) {
+      setVerifyError('Choose a betting platform first.');
+      return;
+    }
+    if (!customerId.trim()) {
+      setVerifyError('Enter your betting account ID first.');
+      return;
+    }
+    setVerifying(true);
+    try {
+      const res = await api.bettingVerify(providerId, customerId.trim());
+      if (res.valid && res.customerName) {
+        setVerifiedName(res.customerName);
+      } else {
+        setVerifyError('Could not verify that account ID — double-check it.');
+      }
+    } catch (err) {
+      setVerifyError(err instanceof ApiError ? err.message : 'Verification failed. Try again.');
+    } finally {
+      setVerifying(false);
+    }
+  }
+
   useEffect(() => {
     api.me().then((me) => setPinSet(me.pinSet)).catch(() => {});
   }, []);
@@ -97,6 +140,10 @@ export default function BettingPage() {
     setResultModal(null);
     if (!providerId) {
       setError('Pick a betting platform.');
+      return;
+    }
+    if (!verifiedName) {
+      setError('Verify the betting account ID before funding.');
       return;
     }
     setSubmitting(true);
@@ -157,6 +204,20 @@ export default function BettingPage() {
             required
           />
         </label>
+        <div className="flex flex-col gap-1">
+          <button
+            type="button"
+            onClick={verifyAccount}
+            disabled={verifying}
+            className="self-start rounded-lg border border-line px-3 py-1.5 text-sm font-medium text-foreground transition hover:border-brand-orange disabled:opacity-50"
+          >
+            {verifying ? 'Verifying…' : 'Verify account'}
+          </button>
+          {verifiedName && (
+            <p className="text-sm font-semibold text-green-600">Confirmed: {verifiedName}</p>
+          )}
+          {verifyError && <p className="text-sm text-red-600">{verifyError}</p>}
+        </div>
         <label className="flex flex-col gap-1 text-sm">
           Amount
           <AmountInput
@@ -171,7 +232,7 @@ export default function BettingPage() {
         {error && <p className="text-sm text-red-600">{error}</p>}
         <button
           type="submit"
-          disabled={submitting || providers.length === 0 || pinSet === false}
+          disabled={submitting || providers.length === 0 || pinSet === false || !verifiedName}
           className="rounded-lg bg-brand-orange px-4 py-2.5 font-semibold text-white shadow-sm transition hover:bg-brand-orange-dark disabled:opacity-50"
         >
           {submitting ? 'Processing…' : 'Fund account'}
